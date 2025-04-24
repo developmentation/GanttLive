@@ -1,4 +1,3 @@
-// components/Gantt.js
 import { useHistory } from '../composables/useHistory.js';
 
 export default {
@@ -19,95 +18,104 @@ export default {
   },
   template: `
     <div class="relative flex-1 bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
-      <!-- Gantt Chart Header (Timeline) -->
-      <div class="sticky top-0 bg-gray-50 dark:bg-gray-900 z-10">
-        <div class="flex border-b border-gray-200 dark:border-gray-700">
-          <div class="w-48 flex-shrink-0"></div>
-          <div class="flex-1 min-w-[800px]">
-            <div class="flex text-sm text-gray-600 dark:text-gray-300 font-medium">
-              <div v-for="date in timeline" :key="date" class="flex-1 text-center py-2 whitespace-nowrap" :style="{ minWidth: dateWidth + 'px' }">
-                {{ formatDate(date) }}
+      <!-- Scrollable Container for Both Header and Body -->
+      <div class="relative flex">
+        <!-- Sticky Left Column -->
+        <div class="w-48 flex-shrink-0 z-20">
+          <div class="w-48 h-10"></div> <!-- Placeholder for header -->
+          <div v-for="(activity, index) in sortedActivities" :key="activity.id" class="border-b border-gray-200 dark:border-gray-700 h-16 flex items-center">
+            <div class="w-48 p-2 bg-gray-50 dark:bg-gray-900">
+              <div class="flex items-center justify-between">
+                <span v-if="!editingActivityId || editingActivityId !== activity.id" @click="editActivityName(activity.id, activity.data.name)" class="text-gray-800 dark:text-gray-200 font-medium truncate cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded" :title="activity.data.name">{{ activity.data.name }}</span>
+                <input
+                  v-else
+                  v-model="editingActivityName"
+                  type="text"
+                  class="bg-transparent text-gray-800 dark:text-gray-200 font-medium outline-none border border-gray-200 dark:border-gray-600 rounded p-1 w-full"
+                  @blur="saveActivityName(activity.id)"
+                  @keypress.enter="saveActivityName(activity.id)"
+                />
+                <input type="checkbox" v-model="selectedActivityIds" :value="activity.id" class="ml-2" @click.shift="handleShiftSelect(index, $event)" />
+              </div>
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                {{ activity.data.owner || 'Unassigned' }}
+                <span v-if="activity.data.status === 'completed'" class="ml-1 text-green-500">✔</span>
               </div>
             </div>
           </div>
+          <div v-if="!activities.length" class="text-center text-gray-500 dark:text-gray-400 py-12">
+            No activities in this project. Use the input below to generate some!
+          </div>
         </div>
-      </div>
 
-      <!-- Gantt Chart Body -->
-      <div class="relative">
-        <div v-for="(activity, index) in sortedActivities" :key="activity.id" class="flex items-center border-b border-gray-200 dark:border-gray-700">
-          <!-- Activity Info -->
-          <div class="w-48 flex-shrink-0 p-2">
-            <div class="flex items-center justify-between">
-              <span v-if="!editingActivityId || editingActivityId !== activity.id" @click="editActivityName(activity.id, activity.data.name)" class="text-gray-800 dark:text-gray-200 font-medium truncate cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded" :title="activity.data.name">{{ activity.data.name }}</span>
-              <input
-                v-else
-                v-model="editingActivityName"
-                type="text"
-                class="bg-transparent text-gray-800 dark:text-gray-200 font-medium outline-none border border-gray-200 dark:border-gray-600 rounded p-1 w-full"
-                @blur="saveActivityName(activity.id)"
-                @keypress.enter="saveActivityName(activity.id)"
+        <!-- Scrollable Gantt Chart -->
+        <div class="flex-1 overflow-x-auto relative">
+          <!-- Gantt Chart Header (Timeline) -->
+          <div class="flex border-b border-gray-200 dark:border-gray-700" :style="{ minWidth: ganttWidth + 'px' }">
+            <div class="flex-1">
+              <div class="flex text-sm text-gray-600 dark:text-gray-300 font-medium">
+                <div v-for="date in timeline" :key="date" class="flex-1 text-center py-2 whitespace-nowrap" :style="{ minWidth: dateWidth + 'px' }">
+                  {{ formatDate(date) }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Gantt Chart Body -->
+          <div ref="ganttBody" :style="{ minWidth: ganttWidth + 'px' }">
+            <div v-for="(activity, index) in sortedActivities" :key="activity.id" class="relative h-16 border-b border-gray-200 dark:border-gray-700">
+              <!-- Background Grid -->
+              <div class="absolute inset-0 flex">
+                <div
+                  v-for="date in timeline"
+                  :key="date"
+                  class="flex-1 border-l border-gray-200 dark:border-gray-700"
+                  :style="{ minWidth: dateWidth + 'px' }"
+                ></div>
+              </div>
+              <!-- Gantt Bar/Diamond -->
+              <div class="relative h-16">
+                <div
+                  v-if="isSingleDay(activity)"
+                  :id="'gantt-element-' + activity.id"
+                  class="absolute h-6 w-6 transform rotate-45 border border-gray-300 dark:border-gray-600"
+                  :style="diamondStyle(activity)"
+                  :class="{ 'bg-green-500 dark:bg-green-400': activity.data.status === 'completed', 'bg-yellow-500 dark:bg-yellow-400': selectedActivityIds.includes(activity.id), 'bg-blue-500 dark:bg-blue-400': !selectedActivityIds.includes(activity.id) && activity.data.status !== 'completed' }"
+                  @click="toggleSelection(activity.id)"
+                  :title="activity.data.name"
+                ></div>
+                <div
+                  v-else
+                  :id="'gantt-element-' + activity.id"
+                  class="absolute h-6 rounded"
+                  :style="barStyle(activity)"
+                  :class="barClasses(activity)"
+                  @click="toggleSelection(activity.id)"
+                  :title="activity.data.name"
+                ></div>
+              </div>
+            </div>
+
+            <!-- Dependency Arrows (Using SVG) -->
+            <svg ref="svgContainer" class="absolute top-0 left-0 pointer-events-none z-20" :width="ganttWidth" :height="ganttHeight">
+              <defs>
+                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+                  <polygon points="0 0, 10 3.5, 0 7" fill="currentColor" class="text-gray-500 dark:text-gray-400" />
+                </marker>
+              </defs>
+              <path
+                v-for="dep in computedDependencies"
+                :key="dep.id"
+                :d="dep.path"
+                stroke="currentColor"
+                stroke-width="2"
+                fill="none"
+                class="text-gray-500 dark:text-gray-400"
+                marker-end="url(#arrowhead)"
+                :class="{ 'text-red-500 dark:text-red-600': dep.conflict }"
               />
-              <input type="checkbox" v-model="selectedActivityIds" :value="activity.id" class="ml-2" @click.shift="handleShiftSelect(index, $event)" />
-            </div>
-            <div class="text-xs text-gray-500 dark:text-gray-400">
-              {{ activity.data.owner || 'Unassigned' }}
-              <span v-if="activity.data.status === 'completed'" class="ml-1 text-green-500">✔</span>
-            </div>
+            </svg>
           </div>
-
-          <!-- Gantt Bar/Diamond -->
-          <div class="flex-1 min-w-[800px] relative h-12">
-            <div class="absolute inset-0 flex">
-              <div
-                v-for="date in timeline"
-                :key="date"
-                class="flex-1 border-l border-gray-200 dark:border-gray-700"
-                :style="{ minWidth: dateWidth + 'px' }"
-              ></div>
-            </div>
-            <div
-              v-if="isSingleDay(activity)"
-              class="absolute h-6 w-6 transform rotate-45 border border-gray-300 dark:border-gray-600"
-              :style="diamondStyle(activity)"
-              :class="{ 'bg-green-500 dark:bg-green-400': activity.data.status === 'completed', 'bg-yellow-500 dark:bg-yellow-400': selectedActivityIds.includes(activity.id), 'bg-blue-500 dark:bg-blue-400': !selectedActivityIds.includes(activity.id) && activity.data.status !== 'completed' }"
-              @click="toggleSelection(activity.id)"
-              :title="activity.data.name"
-            ></div>
-            <div
-              v-else
-              class="absolute h-6 rounded"
-              :style="barStyle(activity)"
-              :class="barClasses(activity)"
-              @click="toggleSelection(activity.id)"
-              :title="activity.data.name"
-            ></div>
-          </div>
-        </div>
-
-        <!-- Dependency Arrows (Using SVG) -->
-        <svg class="absolute inset-0 pointer-events-none" :width="ganttWidth" :height="ganttHeight">
-          <defs>
-            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
-              <polygon points="0 0, 10 3.5, 0 7" fill="currentColor" class="text-gray-500 dark:text-gray-400" />
-            </marker>
-          </defs>
-          <path
-            v-for="dep in dependencies"
-            :key="dep.id"
-            :d="getDependencyPath(dep)"
-            stroke="currentColor"
-            stroke-width="2"
-            fill="none"
-            class="text-gray-500 dark:text-gray-400"
-            marker-end="url(#arrowhead)"
-            :class="{ 'text-red-500 dark:text-red-600': dep.conflict }"
-          />
-        </svg>
-
-        <!-- No Activities -->
-        <div v-if="!activities.length" class="text-center text-gray-500 dark:text-gray-400 py-12">
-          No activities in this project. Use the input below to generate some!
         </div>
       </div>
     </div>
@@ -118,6 +126,8 @@ export default {
     const editingActivityId = Vue.ref(null);
     const editingActivityName = Vue.ref('');
     const sortedActivities = Vue.computed(() => [...props.activities].sort((a, b) => new Date(a.data.startDate) - new Date(b.data.startDate)));
+    const ganttBody = Vue.ref(null);
+    const svgContainer = Vue.ref(null);
 
     // Timeline generation (fixed to days)
     const timeline = Vue.computed(() => {
@@ -139,9 +149,9 @@ export default {
       return dates;
     });
 
-    const dateWidth = Vue.computed(() => 50); // Fixed width for days
+    const dateWidth = Vue.computed(() => 80); // Fixed width for better alignment
     const ganttWidth = Vue.computed(() => timeline.value.length * dateWidth.value);
-    const ganttHeight = Vue.computed(() => props.activities.length * 48);
+    const ganttHeight = Vue.computed(() => props.activities.length * 64); // Row height is 64px
 
     function formatDate(date) {
       const d = new Date(date);
@@ -159,13 +169,11 @@ export default {
     function diamondStyle(activity) {
       const startDate = new Date(activity.data.startDate).getTime();
       const timelineStart = timeline.value[0].getTime();
-      const timelineEnd = timeline.value[timeline.value.length - 1].getTime();
-      const timelineRange = timelineEnd - timelineStart;
-      const position = (startDate - timelineStart) / timelineRange;
-      const left = position * 100;
+      const index = timeline.value.findIndex(d => d.toDateString() === new Date(activity.data.startDate).toDateString());
+      const left = index * dateWidth.value + dateWidth.value / 2 - 12; // Center diamond
       return {
-        left: `${left}%`,
-        top: '12px',
+        left: `${left}px`,
+        top: '20px', // Center of 64px row
       };
     }
 
@@ -174,18 +182,17 @@ export default {
       const startDate = new Date(activity.data.startDate).getTime();
       const endDate = activity.data.endDate ? new Date(activity.data.endDate).getTime() : startDate;
       const timelineStart = timeline.value[0].getTime();
-      const timelineEnd = timeline.value[timeline.value.length - 1].getTime();
-      const timelineRange = timelineEnd - timelineStart;
-
-      const position = (startDate - timelineStart) / timelineRange;
-      const left = position * 100;
-      const duration = (endDate - startDate) / (1000 * 60 * 60 * 24); // Duration in days
-      const width = (duration * dateWidth.value) / (timelineRange / (1000 * 60 * 60 * 24));
+      const startIndex = timeline.value.findIndex(d => d.toDateString() === new Date(activity.data.startDate).toDateString());
+      const endIndex = activity.data.endDate
+        ? timeline.value.findIndex(d => d.toDateString() === new Date(activity.data.endDate).toDateString())
+        : startIndex;
+      const left = startIndex * dateWidth.value;
+      const width = (endIndex - startIndex + 1) * dateWidth.value;
 
       return {
-        left: `${left}%`,
-        width: `${width}%`,
-        top: '12px',
+        left: `${left}px`,
+        width: `${width}px`,
+        top: '20px', // Center of 64px row
       };
     }
 
@@ -204,22 +211,27 @@ export default {
     const dependencies = Vue.computed(() => {
       const deps = [];
       props.activities.forEach(activity => {
-        if (activity.data.dependencies) {
+        if (activity.data.dependencies && Array.isArray(activity.data.dependencies)) {
           activity.data.dependencies.forEach(dep => {
             const toActivity = props.activities.find(a => a.id === dep.dependencyId);
             if (toActivity) {
               const conflict = detectConflict(activity, toActivity, dep.dependencyType);
-              deps.push({
+              const depEntry = {
                 id: `${activity.id}-${dep.dependencyId}`,
                 fromId: activity.id,
                 toId: dep.dependencyId,
                 type: dep.dependencyType,
                 conflict,
-              });
+              };
+              deps.push(depEntry);
+              console.log('Dependency computed:', depEntry);
+            } else {
+              console.warn('Dependency target not found:', dep.dependencyId);
             }
           });
         }
       });
+      console.log('All dependencies:', deps);
       return deps;
     });
 
@@ -244,29 +256,42 @@ export default {
       }
     }
 
-    // Generate SVG path for dependency arrows
-    function getDependencyPath(dep) {
-      const fromIndex = sortedActivities.value.findIndex(a => a.id === dep.fromId);
-      const toIndex = sortedActivities.value.findIndex(a => a.id === dep.toId);
-      if (fromIndex === -1 || toIndex === -1) return '';
+    // Compute dependency paths using DOM bounding boxes
+    const computedDependencies = Vue.computed(() => {
+      if (!ganttBody.value || !svgContainer.value) return [];
 
-      const fromActivity = sortedActivities.value[fromIndex];
-      const toActivity = sortedActivities.value[toIndex];
-      const fromStart = new Date(fromActivity.data.startDate).getTime();
-      const fromEnd = fromActivity.data.endDate ? new Date(fromActivity.data.endDate).getTime() : fromStart;
-      const toStart = new Date(toActivity.data.startDate).getTime();
-      const timelineStart = timeline.value[0].getTime();
-      const timelineEnd = timeline.value[timeline.value.length - 1].getTime();
+      const svgRect = svgContainer.value.getBoundingClientRect();
+      const ganttRect = ganttBody.value.getBoundingClientRect();
 
-      const x1 = ((dep.type.includes('Start') ? fromStart : fromEnd) - timelineStart) / (timelineEnd - timelineStart) * ganttWidth.value;
-      const x2 = ((dep.type.includes('Start') ? toStart : toActivity.data.endDate ? new Date(toActivity.data.endDate).getTime() : toStart) - timelineStart) / (timelineEnd - timelineStart) * ganttWidth.value;
-      const y1 = fromIndex * 48 + 24; // Center of row
-      const y2 = toIndex * 48 + 24;
+      return dependencies.value.map(dep => {
+        const fromElement = document.getElementById(`gantt-element-${dep.fromId}`);
+        const toElement = document.getElementById(`gantt-element-${dep.toId}`);
 
-      // Simple path with a curve
-      const midX = (x1 + x2) / 2;
-      return `M${x1},${y1} C${midX},${y1} ${midX},${y2} ${x2},${y2}`;
-    }
+        if (!fromElement || !toElement) {
+          console.warn('Gantt element not found for dependency:', dep);
+          return { ...dep, path: '' };
+        }
+
+        const fromRect = fromElement.getBoundingClientRect();
+        const toRect = toElement.getBoundingClientRect();
+
+        // Calculate x1 and x2 relative to the SVG's coordinate system
+        const x1 = fromRect.right - ganttRect.left; // Right edge of the "from" bar
+        const x2 = toRect.left - ganttRect.left; // Left edge of the "to" bar
+
+        // Calculate y1 and y2 (center of each bar) relative to the SVG
+        const y1 = (fromRect.top + fromRect.height / 2) - ganttRect.top;
+        const y2 = (toRect.top + toRect.height / 2) - ganttRect.top;
+
+        // Create a path with a small elbow for visibility
+        const midX = x1 + 10; // Small offset from the "from" bar
+        const midX2 = x2 - 10; // Small offset before the "to" bar
+        const path = `M${x1},${y1} H${midX} V${y2} H${midX2} H${x2}`;
+        console.log('Dependency path generated:', { dep, path, x1, y1, x2, y2 });
+
+        return { ...dep, path };
+      });
+    });
 
     // Toggle activity selection
     function toggleSelection(id) {
@@ -324,12 +349,14 @@ export default {
       ganttHeight,
       sortedActivities,
       dependencies,
+      computedDependencies,
+      ganttBody,
+      svgContainer,
       formatDate,
       isSingleDay,
       diamondStyle,
       barStyle,
       barClasses,
-      getDependencyPath,
       toggleSelection,
       handleShiftSelect,
       clearSelections,

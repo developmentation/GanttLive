@@ -1,4 +1,3 @@
-// components/Projects.js
 import { useGlobal } from '../composables/useGlobal.js';
 import { useHistory } from '../composables/useHistory.js';
 import { useRealTime } from '../composables/useRealTime.js';
@@ -78,8 +77,8 @@ export default {
       <div class="flex-1 flex flex-col relative overflow-hidden">
         <!-- Project Details and Gantt -->
         <div v-if="activeProject" class="flex-1 flex flex-col overflow-hidden">
-          <!-- Project Info -->
-          <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+          <!-- Project Info (Sticky) -->
+          <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 sticky top-0 z-10">
             <div class="flex items-center justify-between">
               <div class="flex items-center space-x-2">
                 <h3 v-if="!isEditingProjectName" @click="isEditingProjectName = true" class="text-xl font-semibold cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded" :class="darkMode ? 'text-white' : 'text-gray-900'">{{ activeProject.data.name }}</h3>
@@ -97,7 +96,8 @@ export default {
                 Export Project (JSON)
               </button>
             </div>
-            <p v-if="!isEditingDescription" @click="isEditingDescription = true" class="text-gray-600 dark:text-gray-300 mt-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded">{{ activeProject.data.description || 'No description provided.' }}</p>
+            <p v-if="!isEditingDescription" @click="isEditingDescription = true" class="text-gray-600 dark:text-gray-300 mt-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded">{{ activeProject.data.description || 'No description provided.' }}</p |>
+
             <textarea
               v-else
               v-model="projectDescription"
@@ -128,7 +128,7 @@ export default {
           </div>
 
           <!-- Gantt Chart -->
-          <div class="flex-1 overflow-x-auto overflow-y-auto">
+          <div class="flex-1 overflow-y-auto overflow-x-hidden">
             <gantt :project="activeProject" :activities="projectActivities" :darkMode="darkMode" ref="gantt" @clear-selections="clearSelections" />
           </div>
         </div>
@@ -697,6 +697,32 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. R
             }
           });
         }
+
+        // Add test dependencies between activities (temporary for testing SVG arrows)
+        const activities = entities.value.activities.filter(a => a.data.project === activeProjectId.value);
+        if (activities.length >= 3) { // Ensure we have enough activities
+          console.log('Adding test dependencies between activities');
+          // Add dependency: Activity 0 ("Research Cat Breeds") depends on Activity 1 ("Determine Suitability") with FS
+          updateEntity('activities', activities[0].id, {
+            ...activities[0].data,
+            dependencies: [{ dependencyId: activities[1].id, dependencyType: 'FS' }],
+          });
+          // Add dependency: Activity 2 ("Assess Home Environment") depends on Activity 1 ("Determine Suitability") with FS
+          updateEntity('activities', activities[2].id, {
+            ...activities[2].data,
+            dependencies: [{ dependencyId: activities[1].id, dependencyType: 'FS' }],
+          });
+          // Update entities.value.activities to trigger reactivity
+          const index0 = entities.value.activities.findIndex(a => a.id === activities[0].id);
+          const index2 = entities.value.activities.findIndex(a => a.id === activities[2].id);
+          if (index0 !== -1) {
+            entities.value.activities[index0].data.dependencies = [{ dependencyId: activities[1].id, dependencyType: 'FS' }];
+          }
+          if (index2 !== -1) {
+            entities.value.activities[index2].data.dependencies = [{ dependencyId: activities[1].id, dependencyType: 'FS' }];
+          }
+        }
+
       } catch (error) {
         console.error('Error parsing LLM response:', error);
         llmResponses[llmResponses.length - 1] = {
