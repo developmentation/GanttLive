@@ -191,6 +191,7 @@ export default {
     const isGeneratingSummary = Vue.ref(false);
     const selectedActivityIds = Vue.ref([]);
     const ganttKey = Vue.ref(0);
+    const llmDraftText = Vue.ref("")
 
     const activeProject = Vue.computed(() => {
       return entities.value?.projects?.find(p => p.id === activeProjectId.value) || null;
@@ -592,36 +593,41 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. U
 
     function handleLLMDraft(eventObj) {
       if (eventObj.data.entityType !== 'projects' || !activeProject.value || eventObj.id !== activeProjectId.value) return;
-      const currentResponse = activeProject.value.data.llmLastResponse || { text: '', isStreaming: true, timestamp: Date.now() };
-      const updatedText = (currentResponse.text || '') + eventObj.data.content;
-      updateEntity('projects', activeProjectId.value, {
-        ...activeProject.value.data,
-        llmLastResponse: {
-          ...currentResponse,
-          text: updatedText,
-          isStreaming: true,
-        },
-      });
+
+      llmDraftText.value += eventObj.data.content;
+      console.log("llmDraftText", llmDraftText.value)
+      //   const currentResponse = activeProject.value.data.llmLastResponse || { text: '', isStreaming: true, timestamp: Date.now() };
+    //   const updatedText = (currentResponse.text || '') + eventObj.data.content;
+    //   updateEntity('projects', activeProjectId.value, {
+    //     ...activeProject.value.data,
+    //     llmLastResponse: {
+    //       ...currentResponse,
+    //       text: updatedText,
+    //       isStreaming: true,
+    //     },
+    //   });
+    //This is janky and wrong
       if (!eventObj.data.content.startsWith('```json')) {
-        projectSummary.value = updatedText;
+        projectSummary.value =  llmDraftText.value;
       }
     }
 
     function handleLLMEnd(eventObj) {
       if (eventObj.data.entityType !== 'projects' || !activeProject.value || eventObj.id !== activeProjectId.value) return;
-      const currentResponse = activeProject.value.data.llmLastResponse;
-      if (!currentResponse) {
-        isSending.value = false;
-        isGeneratingSummary.value = false;
-        return;
-      }
+    //   const currentResponse = activeProject.value.data.llmLastResponse;
+    //   if (!currentResponse) {
+    //     isSending.value = false;
+    //     isGeneratingSummary.value = false;
+    //     return;
+    //   }
 
-      let responseText = currentResponse.text || '';
+      let responseText = llmDraftText.value ;// currentResponse.text || '';
+      llmDraftText.value = ""; //Reset
       const llmResponses = activeProject.value.data.llmResponses || [];
       const newResponse = {
         text: responseText,
         isStreaming: false,
-        timestamp: currentResponse.timestamp,
+        timestamp: Date.now(),
       };
       llmResponses.push(newResponse);
 
