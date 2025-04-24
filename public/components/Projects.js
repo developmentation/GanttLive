@@ -131,11 +131,11 @@ export default {
           </button>
         </div>
         <div v-if="isChatOpen" class="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900">
-          <div v-if="activeProject" class="flex-1 overflow-y-auto p-4" style = "max-height:500px">
+          <div v-if="activeProject" class="flex-1 overflow-y-auto p-4" style="max-height:500px">
             <div
               v-for="chat in projectChats"
               :key="chat.id"
-              class="mb-2 p-2 rounded-lg "
+              class="mb-2 p-2 rounded-lg"
               :class="chat.data.isResponse ? 'bg-gray-100 dark:bg-gray-800 mr-auto' : 'bg-gray-100 dark:bg-gray-700 ml-auto'"
             >
               <div class="flex items-center mb-1">
@@ -191,7 +191,7 @@ export default {
     const isGeneratingSummary = Vue.ref(false);
     const selectedActivityIds = Vue.ref([]);
     const ganttKey = Vue.ref(0);
-    const llmDraftText = Vue.ref("")
+    const llmDraftText = Vue.ref('');
 
     const activeProject = Vue.computed(() => {
       return entities.value?.projects?.find(p => p.id === activeProjectId.value) || null;
@@ -374,11 +374,7 @@ export default {
     function generateSummary() {
       if (!activeProjectId.value || !selectedModel.value || isGeneratingSummary.value) return;
       isGeneratingSummary.value = true;
-
-      updateEntity('projects', activeProjectId.value, {
-        ...activeProject.value.data,
-        llmLastResponse: { text: '', isStreaming: true, timestamp: Date.now() },
-      });
+      llmDraftText.value = ''; // Reset draft text
 
       const messageHistory = [];
       messageHistory.push({
@@ -512,14 +508,10 @@ export default {
     function sendMessage() {
       if (!draft.value.trim() || !selectedModel.value || !activeProjectId.value || isSending.value) return;
       isSending.value = true;
+      llmDraftText.value = ''; // Reset draft text
 
       const messageToSend = draft.value;
       draft.value = '';
-
-      updateEntity('projects', activeProjectId.value, {
-        ...activeProject.value.data,
-        llmLastResponse: { text: '', isStreaming: true, timestamp: Date.now() },
-      });
 
       const messageHistory = [];
       const selectedActivities = selectedActivityIds.value.length
@@ -593,36 +585,17 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. U
 
     function handleLLMDraft(eventObj) {
       if (eventObj.data.entityType !== 'projects' || !activeProject.value || eventObj.id !== activeProjectId.value) return;
-
       llmDraftText.value += eventObj.data.content;
-      console.log("llmDraftText", llmDraftText.value)
-      //   const currentResponse = activeProject.value.data.llmLastResponse || { text: '', isStreaming: true, timestamp: Date.now() };
-    //   const updatedText = (currentResponse.text || '') + eventObj.data.content;
-    //   updateEntity('projects', activeProjectId.value, {
-    //     ...activeProject.value.data,
-    //     llmLastResponse: {
-    //       ...currentResponse,
-    //       text: updatedText,
-    //       isStreaming: true,
-    //     },
-    //   });
-    //This is janky and wrong
       if (!eventObj.data.content.startsWith('```json')) {
-        projectSummary.value =  llmDraftText.value;
+        projectSummary.value = llmDraftText.value;
       }
     }
 
     function handleLLMEnd(eventObj) {
       if (eventObj.data.entityType !== 'projects' || !activeProject.value || eventObj.id !== activeProjectId.value) return;
-    //   const currentResponse = activeProject.value.data.llmLastResponse;
-    //   if (!currentResponse) {
-    //     isSending.value = false;
-    //     isGeneratingSummary.value = false;
-    //     return;
-    //   }
 
-      let responseText = llmDraftText.value ;// currentResponse.text || '';
-      llmDraftText.value = ""; //Reset
+      let responseText = llmDraftText.value;
+      llmDraftText.value = ''; // Reset
       const llmResponses = activeProject.value.data.llmResponses || [];
       const newResponse = {
         text: responseText,
@@ -636,28 +609,13 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. U
         try {
           const parsed = JSON5.parse(responseText);
 
-          if (parsed.project) {
-            updateEntity('projects', activeProjectId.value, {
-              ...activeProject.value.data,
-              ...parsed.project,
-              llmResponses,
-              llmLastResponse: null,
-            });
-            activeProject.value.data = {
-              ...activeProject.value.data,
-              ...parsed.project,
-              llmResponses,
-              llmLastResponse: null,
-            };
-          } else {
-            updateEntity('projects', activeProjectId.value, {
-              ...activeProject.value.data,
-              llmResponses,
-              llmLastResponse: null,
-            });
-            activeProject.value.data.llmResponses = llmResponses;
-            activeProject.value.data.llmLastResponse = null;
-          }
+          // Update project data
+          updateEntity('projects', activeProjectId.value, {
+            ...activeProject.value.data,
+            ...(parsed.project || {}),
+            llmResponses,
+            llmLastResponse: null,
+          });
 
           const activityIdMapping = {};
           const tempActivities = [];
@@ -694,16 +652,6 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. U
                   ...act.data,
                   ...update,
                 });
-                const index = entities.value?.activities?.findIndex(a => a.id === update.id) ?? -1;
-                if (index !== -1) {
-                  entities.value.activities[index] = {
-                    ...entities.value.activities[index],
-                    data: {
-                      ...entities.value.activities[index].data,
-                      ...update,
-                    },
-                  };
-                }
               }
             });
           }
@@ -712,7 +660,6 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. U
             parsed.activitiesToDelete.forEach(id => {
               if (entities.value?.activities?.some(a => a.id === id)) {
                 removeEntity('activities', id);
-                entities.value.activities = (entities.value?.activities || []).filter(a => a.id !== id);
               }
             });
           }
@@ -773,18 +720,6 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. U
                     targetId,
                     dependencyType: update.dependencyType,
                   });
-                  const index = entities.value?.dependencies?.findIndex(d => d.id === update.id) ?? -1;
-                  if (index !== -1) {
-                    entities.value.dependencies[index] = {
-                      ...entities.value.dependencies[index],
-                      data: {
-                        ...entities.value.dependencies[index].data,
-                        sourceId,
-                        targetId,
-                        dependencyType: update.dependencyType,
-                      },
-                    };
-                  }
                 }
               }
             });
@@ -794,7 +729,6 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. U
             parsed.dependenciesToDelete.forEach(id => {
               if (entities.value?.dependencies?.some(d => d.id === id)) {
                 removeEntity('dependencies', id);
-                entities.value.dependencies = (entities.value?.dependencies || []).filter(d => d.id !== id);
               }
             });
           }
@@ -812,15 +746,13 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. U
           });
         }
       } else {
-        const lastResponse = llmResponses[llmResponses.length - 1];
         updateEntity('projects', activeProjectId.value, {
           ...activeProject.value.data,
-          summary: lastResponse,
+          summary: newResponse,
           llmResponses,
           llmLastResponse: null,
         });
-        activeProject.value.data.summary = lastResponse;
-        projectSummary.value = lastResponse.text;
+        projectSummary.value = newResponse.text;
       }
 
       isSending.value = false;
