@@ -1,3 +1,4 @@
+// components/Projects.js
 import { useGlobal } from '../composables/useGlobal.js';
 import { useHistory } from '../composables/useHistory.js';
 import { useRealTime } from '../composables/useRealTime.js';
@@ -74,10 +75,10 @@ export default {
       </div>
 
       <!-- Main Area (Gantt Chart and LLM Input) -->
-      <div class="flex-1 flex flex-col relative">
-        <!-- Project Details -->
-        <div v-if="activeProject" class="flex flex-col h-full">
-          <!-- Fixed Title and Export Button -->
+      <div class="flex-1 flex flex-col relative overflow-hidden">
+        <!-- Project Details and Gantt -->
+        <div v-if="activeProject" class="flex-1 flex flex-col overflow-hidden">
+          <!-- Project Info -->
           <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
             <div class="flex items-center justify-between">
               <div class="flex items-center space-x-2">
@@ -96,10 +97,6 @@ export default {
                 Export Project (JSON)
               </button>
             </div>
-          </div>
-
-          <!-- Non-Sticky Description and Details -->
-          <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
             <p v-if="!isEditingDescription" @click="isEditingDescription = true" class="text-gray-600 dark:text-gray-300 mt-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded">{{ activeProject.data.description || 'No description provided.' }}</p>
             <textarea
               v-else
@@ -131,48 +128,41 @@ export default {
           </div>
 
           <!-- Gantt Chart -->
-          <div class="flex-1">
-            <gantt
-              :project="activeProject"
-              :activities="projectActivities"
-              :darkMode="darkMode"
-              :maxWidth="maxGanttWidth"
-              ref="gantt"
-              @clear-selections="clearSelections"
-            />
-          </div>
-
-          <!-- Fixed LLM Input Bar -->
-          <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-            <div class="flex gap-3 items-center">
-              <textarea
-                v-model="draft"
-                rows="2"
-                class="flex-1 p-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:outline-none transition-all resize-none whitespace-pre-wrap"
-                :placeholder="inputPlaceholder"
-                @keypress.enter="handleEnterKey"
-              ></textarea>
-              <button
-                @click="sendMessage"
-                class="py-2 px-4 bg-blue-600 dark:bg-blue-500 dark:hover:bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all flex items-center"
-                :disabled="!draft?.trim() || !selectedModel || !activeProjectId || isSending"
-              >
-                <span v-if="!isSending">Generate</span>
-                <span v-else class="flex items-center">
-                  <svg class="animate-spin h-5 w-5 mr-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
-                  </svg>
-                  Generating...
-                </span>
-              </button>
-            </div>
+          <div class="flex-1 overflow-x-auto overflow-y-auto">
+            <gantt :project="activeProject" :activities="projectActivities" :darkMode="darkMode" ref="gantt" @clear-selections="clearSelections" />
           </div>
         </div>
 
         <!-- No Project Selected -->
         <div v-else class="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
           Select a project to view its Gantt chart.
+        </div>
+
+        <!-- LLM Input (Bottom) -->
+        <div v-if="activeProject" class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+          <div class="flex gap-3 items-center">
+            <textarea
+              v-model="draft"
+              rows="2"
+              class="flex-1 p-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:outline-none transition-all resize-none whitespace-pre-wrap"
+              :placeholder="inputPlaceholder"
+              @keypress.enter="handleEnterKey"
+            ></textarea>
+            <button
+              @click="sendMessage"
+              class="py-2 px-4 bg-blue-600 dark:bg-blue-500 dark:hover:bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all flex items-center"
+              :disabled="!draft?.trim() || !selectedModel || !activeProjectId || isSending"
+            >
+              <span v-if="!isSending">Generate</span>
+              <span v-else class="flex items-center">
+                <svg class="animate-spin h-5 w-5 mr-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                </svg>
+                Generating...
+              </span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -255,22 +245,6 @@ export default {
     const projectOutcomes = Vue.ref('');
     const isChatOpen = Vue.ref(true);
     const gantt = Vue.ref(null);
-    const windowWidth = Vue.ref(window.innerWidth);
-    const projectSidebarWidth = 0.25 * windowWidth.value; // 25% of window width
-    const chatBarWidth = isChatOpen.value ? 0.25 * windowWidth.value : 48; // 25% when open, 48px when closed
-    const maxGanttWidth = Vue.computed(() => windowWidth.value - projectSidebarWidth - chatBarWidth);
-
-    // Update window width on resize
-    Vue.onMounted(() => {
-      window.addEventListener('resize', () => {
-        windowWidth.value = window.innerWidth;
-      });
-    });
-
-    // Update chat bar width when toggled
-    Vue.watch(isChatOpen, (newValue) => {
-      chatBarWidth.value = newValue ? 0.25 * windowWidth.value : 48;
-    });
 
     // Computed properties
     const activeProject = Vue.computed(() => {
@@ -723,26 +697,6 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. R
             }
           });
         }
-
-        // Add sample dependency for testing (temporary)
-        const permittingActivity = entities.value.activities.find(a => a.data.name === "Secure Permits and Licenses" && a.data.project === activeProjectId.value);
-        const constructionActivity = entities.value.activities.find(a => a.data.name === "Shop Construction and Renovation" && a.data.project === activeProjectId.value);
-        if (permittingActivity && constructionActivity) {
-          updateEntity('activities', constructionActivity.id, {
-            ...constructionActivity.data,
-            dependencies: [{ dependencyId: permittingActivity.id, dependencyType: "FS" }],
-          });
-          const index = entities.value.activities.findIndex(a => a.id === constructionActivity.id);
-          if (index !== -1) {
-            entities.value.activities[index] = {
-              ...entities.value.activities[index],
-              data: {
-                ...entities.value.activities[index].data,
-                dependencies: [{ dependencyId: permittingActivity.id, dependencyType: "FS" }],
-              },
-            };
-          }
-        }
       } catch (error) {
         console.error('Error parsing LLM response:', error);
         llmResponses[llmResponses.length - 1] = {
@@ -804,7 +758,6 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. R
       isChatOpen,
       gantt,
       models,
-      maxGanttWidth,
       addProject,
       selectProject,
       editProjectName,
