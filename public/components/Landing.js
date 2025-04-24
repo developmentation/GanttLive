@@ -78,7 +78,7 @@ export default {
 
         <!-- How It Works Section -->
         <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 bg-white dark:bg-gray-900">
-          <h3 class="text-4xl font-bold mb-12 text-center text-gray-900 dark:text-white">How Gantt.Live Works</h3>
+          <h3 class="text-4xl font-bold mb-12 text-center text-gray-900 dark:text-white">How IJustGantt Works</h3>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
             <div v-for="(step, index) in steps" :key="step.title" class="text-center">
               <div class="relative mb-6">
@@ -133,7 +133,7 @@ export default {
           <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
               <div>
-                <h4 class="text-lg font-semibold mb-4">Gantt.Live</h4>
+                <h4 class="text-lg font-semibold mb-4">IJustGantt.com</h4>
                 <p class="text-gray-400">AI-powered project planning. Always free. Always MIT.</p>
               </div>
               <div>

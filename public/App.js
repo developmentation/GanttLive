@@ -12,7 +12,7 @@ export default {
             <div class="flex items-center">
               <!-- Logo -->
               <router-link to="/" class="flex-shrink-0 flex items-center text-blue-500 dark:text-blue-400 font-semibold text-xl tracking-tight">
-                Gantt.Live
+                IJustGantt.com
               </router-link>
 
               <!-- Desktop Menu -->
