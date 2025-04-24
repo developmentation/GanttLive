@@ -38,18 +38,21 @@ export default {
       </div>
 
       <!-- Projects Sidebar (Left) -->
-      <div class="w-1/4 border-r border-gray-200 dark:border-gray-700 flex flex-col">
-        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-4 bg-gray-50 dark:bg-gray-900">
-          <button @click="addProject" class="p-2 bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 text-white rounded-lg transition-all shadow-sm">
+      <div class="border-r border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300" :class="isProjectsOpen ? 'w-1/4' : 'w-12'">
+        <div class="p-4 border-b border-gray-200 dark:border-grey-700 flex items-center gap-4 bg-gray-50 dark:bg-gray-900">
+          <button @click="toggleProjects" class="text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400">
+            <i :class="isProjectsOpen ? 'pi pi-chevron-left' : 'pi pi-chevron-right'"></i>
+          </button>
+          <button v-if="isProjectsOpen" @click="addProject" class="p-2 bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 text-white rounded-lg transition-all shadow-sm">
             <i class="pi pi-plus"></i>
           </button>
-          <select v-model="selectedModel" class="flex-1 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:outline-none transition-all">
+          <select v-if="isProjectsOpen" v-model="selectedModel" class="flex-1 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:outline-none transition-all">
             <option v-for="model in models" :key="model.model" :value="model.model">
               {{ model.name.en }} ({{ model.provider }})
             </option>
           </select>
         </div>
-        <div class="flex-1 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
+        <div v-if="isProjectsOpen" class="flex-1 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
           <div v-for="project in entities?.projects || []" :key="project.id" class="p-4 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-all" :class="{ 'bg-blue-50 dark:bg-blue-900': activeProjectId === project.id }" @click="selectProject(project.id)">
             <div class="flex-1 truncate">
               <span v-if="isEditingProject !== project.id" class="text-gray-900 dark:text-white font-medium">{{ project.data.name }}</span>
@@ -79,7 +82,7 @@ export default {
                 <h3 v-if="!isEditingProjectName" class="text-xl font-semibold" :class="darkMode ? 'text-white' : 'text-gray-900'">{{ activeProject.data.name }}</h3>
                 <input v-else v-model="projectName" type="text" class="text-xl font-semibold bg-transparent border border-gray-200 dark:border-gray-600 rounded p-1 w-full" :class="darkMode ? 'text-white' : 'text-gray-900'" @blur="saveProjectName" @keydown.enter="saveProjectName" />
                 <button @click="openSummaryModal" class="text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400">
-                  <i class="pi pi-clipboard"></i>
+                  <i class="pi pi-file-check"></i>
                 </button>
               </div>
               <button @click="exportProject" class="py-1 px-3 bg-blue-500 dark:bg-blue-400 hover:bg-blue-600 text-white rounded-lg transition-all">
@@ -128,11 +131,11 @@ export default {
           </button>
         </div>
         <div v-if="isChatOpen" class="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900">
-          <div v-if="activeProject" class="flex-1 overflow-y-auto p-4">
+          <div v-if="activeProject" class="flex-1 overflow-y-auto p-4" style = "max-height:500px">
             <div
               v-for="chat in projectChats"
               :key="chat.id"
-              class="mb-2 p-2 rounded-lg"
+              class="mb-2 p-2 rounded-lg "
               :class="chat.data.isResponse ? 'bg-gray-100 dark:bg-gray-800 mr-auto' : 'bg-gray-100 dark:bg-gray-700 ml-auto'"
             >
               <div class="flex items-center mb-1">
@@ -149,7 +152,7 @@ export default {
               No chat messages yet.
             </div>
           </div>
-          <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+          <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
             <div class="flex gap-3">
               <textarea v-model="chatDraft" rows="1" class="flex-1 p-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:outline-none transition-all resize-none whitespace-pre-wrap" placeholder="Chat with team members..." @keydown.enter="sendChatMessage"></textarea>
               <button @click="sendChatMessage" class="py-2 px-4 bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 text-white rounded-lg transition-all" :disabled="!chatDraft?.trim() || !activeProjectId">
@@ -181,12 +184,13 @@ export default {
     const projectBudget = Vue.ref(null);
     const projectOutcomes = Vue.ref('');
     const isChatOpen = Vue.ref(true);
+    const isProjectsOpen = Vue.ref(true);
     const gantt = Vue.ref(null);
     const showSummaryModal = Vue.ref(false);
     const projectSummary = Vue.ref('');
     const isGeneratingSummary = Vue.ref(false);
-    const selectedActivityIds = Vue.ref([]); // Shared state to manage selections
-    const ganttKey = Vue.ref(0); // Key to force re-render of Gantt component
+    const selectedActivityIds = Vue.ref([]);
+    const ganttKey = Vue.ref(0);
 
     const activeProject = Vue.computed(() => {
       return entities.value?.projects?.find(p => p.id === activeProjectId.value) || null;
@@ -268,13 +272,13 @@ export default {
         llmLastResponse: null,
       });
       activeProjectId.value = id;
-      selectedActivityIds.value = []; // Clear selections when switching projects
+      selectedActivityIds.value = [];
     }
 
     function selectProject(id) {
       activeProjectId.value = id;
       isEditingProject.value = null;
-      selectedActivityIds.value = []; // Clear selections when switching projects
+      selectedActivityIds.value = [];
     }
 
     function editProjectName(project) {
@@ -307,7 +311,7 @@ export default {
       if (activeProjectId.value === id) {
         activeProjectId.value = entities.value?.projects?.[0]?.id || null;
       }
-      selectedActivityIds.value = []; // Clear selections when deleting a project
+      selectedActivityIds.value = [];
     }
 
     function saveProjectName() {
@@ -485,21 +489,22 @@ export default {
       isChatOpen.value = !isChatOpen.value;
     }
 
+    function toggleProjects() {
+      isProjectsOpen.value = !isProjectsOpen.value;
+    }
+
     function handleClearSelections(selectedId) {
-      // Clear all selections except the newly selected ID (if provided)
       if (selectedId) {
         selectedActivityIds.value = [selectedId];
       } else {
         selectedActivityIds.value = [];
       }
-      // Sync with Gantt component if it exists
       if (gantt.value && typeof gantt.value.clearSelections === 'function') {
         gantt.value.clearSelections();
       }
     }
 
     function handleActivityChanged() {
-      // Force re-render of Gantt component to recalculate timeline and bars
       ganttKey.value += 1;
     }
 
@@ -507,7 +512,6 @@ export default {
       if (!draft.value.trim() || !selectedModel.value || !activeProjectId.value || isSending.value) return;
       isSending.value = true;
 
-      // Clear the input box immediately after sending
       const messageToSend = draft.value;
       draft.value = '';
 
@@ -802,25 +806,23 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. U
           });
         }
       } else {
-        // For non-JSON responses (like the summary), set data.summary to the full last llmResponses item
         const lastResponse = llmResponses[llmResponses.length - 1];
         updateEntity('projects', activeProjectId.value, {
           ...activeProject.value.data,
-          summary: lastResponse, // Set the full response object as data.summary
+          summary: lastResponse,
           llmResponses,
           llmLastResponse: null,
         });
         activeProject.value.data.summary = lastResponse;
-        projectSummary.value = lastResponse.text; // Update the textarea with the text property
+        projectSummary.value = lastResponse.text;
       }
 
-      isSending.value = false; // Ensure spinner stops
+      isSending.value = false;
       isGeneratingSummary.value = false;
-      selectedActivityIds.value = []; // Clear selections directly
+      selectedActivityIds.value = [];
       if (gantt.value && typeof gantt.value.clearSelections === 'function') {
         gantt.value.clearSelections();
       }
-      // Force Gantt recalculation after LLM updates
       ganttKey.value += 1;
     }
 
@@ -852,6 +854,7 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. U
       projectChats,
       inputPlaceholder,
       isChatOpen,
+      isProjectsOpen,
       gantt,
       models,
       showSummaryModal,
@@ -879,6 +882,7 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. U
       handleEnterKey,
       sendChatMessage,
       toggleChat,
+      toggleProjects,
       handleClearSelections,
       handleActivityChanged,
       sendMessage,

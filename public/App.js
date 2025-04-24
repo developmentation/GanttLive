@@ -17,13 +17,14 @@ export default {
 
               <!-- Desktop Menu -->
               <div class="hidden sm:ml-6 sm:flex sm:space-x-6">
-                <router-link
+<!--                <router-link
                   to="/"
                   class="text-gray-600 dark:text-gray-300 hover:text-blue-500 dark:hover:text-blue-400 px-3 py-2 text-sm font-medium transition-colors duration-200 rounded-md"
                   :class="{ 'text-blue-500 dark:text-blue-400': $route.path === '/' || $route.name === 'landingWithChannel' }"
                 >
                   Home
-                </router-link>
+                </router-link> 
+                -->
               </div>
             </div>
 
@@ -78,13 +79,13 @@ export default {
         <!-- Mobile Menu -->
         <div class="sm:hidden" v-show="menuOpen">
           <div class="px-2 pt-2 pb-3 space-y-1 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-            <router-link
+         <!--   <router-link
               to="/"
               class="block px-3 py-2 text-base font-medium text-gray-600 dark:text-gray-300 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
               :class="{ 'text-blue-500 dark:text-blue-400': $route.path === '/' || $route.name === 'landingWithChannel' }"
             >
               Home
-            </router-link>
+            </router-link> -->
           </div>
         </div>
       </nav>

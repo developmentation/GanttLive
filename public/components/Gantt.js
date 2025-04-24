@@ -107,6 +107,7 @@ export default {
             </div>
           </div>
           <div class="mt-6 flex justify-end space-x-2">
+            <button @click="fixDates" class="px-4 py-2 bg-green-600 text-white rounded">Fix Dates</button>
             <button @click="closeDependencyModal" class="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-gray-100 rounded">Cancel</button>
             <button @click="saveDependencyModal" class="px-4 py-2 bg-blue-600 text-white rounded">{{ isEditingDependency ? 'Save' : 'Add' }}</button>
           </div>
@@ -285,7 +286,13 @@ export default {
       if (!Array.isArray(props.dependencies)) return [];
       return [...props.dependencies]
         .filter(dep => dep && dep.data && dep.data.sourceId && dep.data.targetId)
-        .sort((a, b) => a.id.localeCompare(b.id));
+        .sort((a, b) => {
+          const sourceA = sortedActivities.value.find(act => act.id === a.data.sourceId);
+          const sourceB = sortedActivities.value.find(act => act.id === b.data.sourceId);
+          const dateA = sourceA ? new Date(sourceA.data.startDate).getTime() : 0;
+          const dateB = sourceB ? new Date(sourceB.data.startDate).getTime() : 0;
+          return dateA - dateB;
+        });
     });
 
     function debounce(fn, wait) {
@@ -344,7 +351,7 @@ export default {
       
       const oneMonthInMs = 31 * 24 * 60 * 60 * 1000;
       const bufferBefore = 30 * 24 * 60 * 60 * 1000;
-      const bufferAfter = 30 * 24 * 60 * 60 * 1000; // Ensure buffer for the last date
+      const bufferAfter = 30 * 24 * 60 * 60 * 1000;
       const cappedMinDate = minDate - bufferBefore;
       const cappedMaxDate = Math.max(maxDate + oneMonthInMs, maxDate + bufferAfter);
       const diffTime = cappedMaxDate - cappedMinDate;
@@ -381,7 +388,6 @@ export default {
           dates.push(new Date(currentDate));
           currentDate.setMonth(currentDate.getMonth() + 1);
         }
-        // Ensure the last date is included if it falls within the range
         if (currentDate.getTime() > cappedMaxDate && dates[dates.length - 1].getTime() < maxDate) {
           const lastDate = new Date(maxDate);
           lastDate.setDate(1);
@@ -400,13 +406,13 @@ export default {
 
     const dateWidth = Vue.computed(() => {
       if (!timeline.value || !timeline.value.length) return 40;
-      const idealWidth = availableWidth.value / (timeline.value.length - 1); // Adjust for last date
+      const idealWidth = availableWidth.value / (timeline.value.length - 1);
       return Math.max(idealWidth, 40);
     });
 
     const ganttWidth = Vue.computed(() => {
       if (!timeline.value || !timeline.value.length) return availableWidth.value;
-      return (timeline.value.length - 1) * dateWidth.value; // Adjust for last date
+      return (timeline.value.length - 1) * dateWidth.value;
     });
 
     const ganttHeight = Vue.computed(() => (sortedActivities.value.length + 1) * 64 + 40);
@@ -421,7 +427,7 @@ export default {
     function getDateLabelPosition(date, index) {
       const basePosition = getPosition(date);
       if (index === timeline.value.length - 1) {
-        return basePosition; // Position the last date at its exact spot
+        return basePosition;
       }
       const nextDate = timeline.value[index + 1];
       const nextPosition = getPosition(nextDate);
@@ -554,7 +560,7 @@ export default {
             });
           }
         }
-        clearTimeout(debounceTimeout); // Ensure the debounced function runs immediately
+        clearTimeout(debounceTimeout);
         debouncedSortAndTimelineUpdate();
         tempActivityDates.value = {};
         draggingActivityId.value = null;
@@ -716,6 +722,129 @@ export default {
       }
     }
 
+    function fixDates() {
+      // Build a dependency graph to detect cycles and determine order
+      const graph = new Map();
+      const inDegree = new Map();
+      sortedActivities.value.forEach(activity => {
+        graph.set(activity.id, []);
+        inDegree.set(activity.id, 0);
+      });
+
+      sortedDependencies.value.forEach(dep => {
+        graph.get(dep.data.sourceId).push({ targetId: dep.data.targetId, type: dep.data.dependencyType });
+        inDegree.set(dep.data.targetId, (inDegree.get(dep.data.targetId) || 0) + 1);
+      });
+
+      // Topological sort to detect cycles and determine processing order
+      const queue = [];
+      const visited = new Set();
+      const recStack = new Set();
+      sortedActivities.value.forEach(activity => {
+        if (inDegree.get(activity.id) === 0) {
+          queue.push(activity.id);
+        }
+      });
+
+      const topologicalOrder = [];
+      while (queue.length > 0) {
+        const activityId = queue.shift();
+        if (recStack.has(activityId)) {
+          console.error('Circular dependency detected. Cannot fix dates.');
+          alert('Circular dependency detected. Cannot fix dates.');
+          return;
+        }
+        topologicalOrder.push(activityId);
+        graph.get(activityId).forEach(dep => {
+          inDegree.set(dep.targetId, inDegree.get(dep.targetId) - 1);
+          if (inDegree.get(dep.targetId) === 0) {
+            queue.push(dep.targetId);
+          }
+        });
+      }
+
+      if (topologicalOrder.length !== sortedActivities.value.length) {
+        console.error('Circular dependency detected. Cannot fix dates.');
+        alert('Circular dependency detected. Cannot fix dates.');
+        return;
+      }
+
+      // Process activities in topological order to resolve conflicts
+      const updatedActivities = new Map();
+      topologicalOrder.forEach(activityId => {
+        const activity = sortedActivities.value.find(a => a.id === activityId);
+        if (!activity) return;
+
+        let earliestStart = new Date(activity.data.startDate).getTime();
+        let duration = activity.data.endDate
+          ? new Date(activity.data.endDate).getTime() - new Date(activity.data.startDate).getTime()
+          : 0;
+
+        // Check all dependencies where this activity is the target
+        sortedDependencies.value.forEach(dep => {
+          if (dep.data.targetId !== activityId) return;
+
+          const sourceActivity = sortedActivities.value.find(a => a.id === dep.data.sourceId);
+          if (!sourceActivity) return;
+
+          let sourceStart = new Date(sourceActivity.data.startDate).getTime();
+          let sourceEnd = sourceActivity.data.endDate
+            ? new Date(sourceActivity.data.endDate).getTime()
+            : sourceStart;
+
+          if (updatedActivities.has(dep.data.sourceId)) {
+            const updatedSource = updatedActivities.get(dep.data.sourceId);
+            sourceStart = updatedSource.startDate;
+            sourceEnd = updatedSource.endDate;
+          }
+
+          let requiredStart;
+          switch (dep.data.dependencyType) {
+            case 'FS':
+              requiredStart = sourceEnd + 1; // Target must start after source ends
+              break;
+            case 'FF':
+              requiredStart = sourceEnd - duration; // Target end must match source end
+              break;
+            case 'SS':
+              requiredStart = sourceStart; // Target must start when source starts
+              break;
+            case 'SF':
+              requiredStart = sourceStart - duration; // Target end must match source start
+              break;
+            default:
+              return;
+          }
+
+          earliestStart = Math.max(earliestStart, requiredStart);
+        });
+
+        const newStartDate = new Date(earliestStart);
+        const newEndDate = duration > 0 ? new Date(earliestStart + duration) : newStartDate;
+
+        updatedActivities.set(activityId, {
+          startDate: newStartDate.getTime(),
+          endDate: newEndDate.getTime(),
+        });
+      });
+
+      // Update all activities with new dates
+      updatedActivities.forEach((dates, activityId) => {
+        const activity = sortedActivities.value.find(a => a.id === activityId);
+        if (activity) {
+          updateEntity('activities', activityId, {
+            ...activity.data,
+            startDate: new Date(dates.startDate).toISOString(),
+            endDate: new Date(dates.endDate).toISOString(),
+          });
+        }
+      });
+
+      emit('activity-changed');
+      showActivityModal.value = false;
+    //   alert('Dates have been adjusted to resolve conflicts.');
+    }
+
     function updateScrollPosition() {
       if (ganttContainer.value) {
         scrollLeft.value = ganttContainer.value.scrollLeft;
@@ -736,8 +865,8 @@ export default {
       if (selectedActivityIds.value.includes(id)) {
         selectedActivityIds.value = selectedActivityIds.value.filter(aid => aid !== id);
       } else {
-        selectedActivityIds.value = [id]; // Only allow single selection to avoid recursive issues
-        emit('clear-selections', id); // Emit event to notify parent of selection change
+        selectedActivityIds.value = [id];
+        emit('clear-selections', id);
       }
     }
 
@@ -751,7 +880,7 @@ export default {
         const start = Math.min(lastSelectedIndex, index);
         const end = Math.max(lastSelectedIndex, index);
         selectedActivityIds.value = sortedActivities.value.slice(start, end + 1).map(a => a.id);
-        emit('clear-selections', null); // Emit with null to indicate a bulk selection
+        emit('clear-selections', null);
       }
     }
 
@@ -787,7 +916,7 @@ export default {
     function deleteActivity(activityId) {
       removeEntity('activities', activityId);
       closeActivityModal();
-      emit('activity-changed'); // Emit event to trigger recalculation
+      emit('activity-changed');
     }
 
     function saveActivityModal() {
@@ -815,7 +944,7 @@ export default {
         addEntity('activities', newActivity);
       }
       closeActivityModal();
-      emit('activity-changed'); // Emit event to trigger recalculation
+      emit('activity-changed');
     }
 
     function editDependency(dep) {
@@ -831,7 +960,7 @@ export default {
 
     function deleteDependency(id) {
       removeEntity('dependencies', id);
-      emit('activity-changed'); // Emit event to trigger recalculation
+      emit('activity-changed');
     }
 
     function openDependencyModal() {
@@ -871,7 +1000,7 @@ export default {
         dependencyType: 'FS',
       };
       isEditingDependency.value = false;
-      emit('activity-changed'); // Emit event to trigger recalculation
+      emit('activity-changed');
     }
 
     function getActivityName(id) {
@@ -925,6 +1054,7 @@ export default {
       closeDependencyModal,
       saveDependencyModal,
       getActivityName,
+      fixDates,
       onMouseMove,
       onMouseUp,
     };
