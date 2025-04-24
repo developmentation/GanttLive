@@ -17,46 +17,21 @@ export default {
     <div class="flex h-[calc(100vh-8rem)] bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
       <!-- Projects Sidebar (Left) -->
       <div class="w-1/4 border-r border-gray-200 dark:border-gray-700 flex flex-col">
-        <!-- Header -->
         <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-4 bg-gray-50 dark:bg-gray-900">
-          <button
-            @click="addProject"
-            class="p-2 bg-blue-600 dark:bg-blue-500 dark:hover:bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all shadow-sm"
-          >
+          <button @click="addProject" class="p-2 bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 text-white rounded-lg transition-all shadow-sm">
             <i class="pi pi-plus"></i>
           </button>
-          <select
-            v-model="selectedModel"
-            class="flex-1 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:outline-none transition-all"
-          >
+          <select v-model="selectedModel" class="flex-1 p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:outline-none transition-all">
             <option v-for="model in models" :key="model.model" :value="model.model">
               {{ model.name.en }} ({{ model.provider }})
             </option>
           </select>
         </div>
-
-        <!-- Projects List -->
         <div class="flex-1 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
-          <div
-            v-for="project in entities?.projects || []"
-            :key="project.id"
-            class="p-4 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-all"
-            :class="{ 'bg-blue-50 dark:bg-blue-900': activeProjectId === project.id }"
-            @click="selectProject(project.id)"
-          >
+          <div v-for="project in entities?.projects || []" :key="project.id" class="p-4 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-all" :class="{ 'bg-blue-50 dark:bg-blue-900': activeProjectId === project.id }" @click="selectProject(project.id)">
             <div class="flex-1 truncate">
-              <span v-if="isEditingProject !== project.id" class="text-gray-900 dark:text-white font-medium">
-                {{ project.data.name }}
-              </span>
-              <input
-                v-else
-                v-model="project.data.name"
-                type="text"
-                class="bg-transparent text-gray-900 dark:text-white flex-1 outline-none font-medium w-full"
-                @blur="updateProject(project)"
-                @keypress.enter="updateProject(project)"
-                :id="'project-input-' + project.id"
-              />
+              <span v-if="isEditingProject !== project.id" class="text-gray-900 dark:text-white font-medium">{{ project.data.name }}</span>
+              <input v-else v-model="project.data.name" type="text" class="bg-transparent text-gray-900 dark:text-white flex-1 outline-none font-medium w-full" @blur="updateProject(project)" @keypress.enter="updateProject(project)" :id="'project-input-' + project.id" />
             </div>
             <div class="flex gap-2">
               <button @click.stop="editProjectName(project)" class="text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400">
@@ -75,83 +50,37 @@ export default {
 
       <!-- Main Area (Gantt Chart and LLM Input) -->
       <div class="flex-1 flex flex-col relative overflow-hidden">
-        <!-- Project Details and Gantt -->
         <div v-if="activeProject" class="flex-1 flex flex-col overflow-hidden">
-          <!-- Project Info (Sticky) -->
           <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 sticky top-0 z-10">
             <div class="flex items-center justify-between">
               <div class="flex items-center space-x-2">
                 <h3 v-if="!isEditingProjectName" @click="isEditingProjectName = true" class="text-xl font-semibold cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded" :class="darkMode ? 'text-white' : 'text-gray-900'">{{ activeProject.data.name }}</h3>
-                <input
-                  v-else
-                  v-model="projectName"
-                  type="text"
-                  class="text-xl font-semibold bg-transparent border border-gray-200 dark:border-gray-600 rounded p-1 w-full"
-                  :class="darkMode ? 'text-white' : 'text-gray-900'"
-                  @blur="saveProjectName"
-                  @keypress.enter="saveProjectName"
-                />
+                <input v-else v-model="projectName" type="text" class="text-xl font-semibold bg-transparent border border-gray-200 dark:border-gray-600 rounded p-1 w-full" :class="darkMode ? 'text-white' : 'text-gray-900'" @blur="saveProjectName" @keypress.enter="saveProjectName" />
               </div>
-              <button @click="exportProject" class="py-1 px-3 bg-blue-500 dark:bg-blue-400 dark:hover:bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-all">
+              <button @click="exportProject" class="py-1 px-3 bg-blue-500 dark:bg-blue-400 hover:bg-blue-600 text-white rounded-lg transition-all">
                 Export Project (JSON)
               </button>
             </div>
             <p v-if="!isEditingDescription" @click="isEditingDescription = true" class="text-gray-600 dark:text-gray-300 mt-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded">{{ activeProject.data.description || 'No description provided.' }}</p>
-            <textarea
-              v-else
-              v-model="projectDescription"
-              class="w-full p-1 bg-transparent border border-gray-200 dark:border-gray-600 rounded text-gray-600 dark:text-gray-300"
-              @blur="saveProjectDescription"
-              @keypress.enter="saveProjectDescription"
-            ></textarea>
+            <textarea v-else v-model="projectDescription" class="w-full p-1 bg-transparent border border-gray-200 dark:border-gray-600 rounded text-gray-600 dark:text-gray-300" @blur="saveProjectDescription" @keypress.enter="saveProjectDescription"></textarea>
             <div class="flex gap-4 mt-2 text-sm text-gray-500 dark:text-gray-400">
               <span v-if="!isEditingBudget" @click="isEditingBudget = true" class="cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded">Budget: {{ activeProject.data.budget ? '$' + activeProject.data.budget.toLocaleString() : 'N/A' }}</span>
-              <input
-                v-else
-                v-model="projectBudget"
-                type="number"
-                class="bg-transparent border border-gray-200 dark:border-gray-600 rounded p-1 text-gray-500 dark:text-gray-400"
-                @blur="saveProjectBudget"
-                @keypress.enter="saveProjectBudget"
-              />
+              <input v-else v-model="projectBudget" type="number" class="bg-transparent border border-gray-200 dark:border-gray-600 rounded p-1 text-gray-500 dark:text-gray-400" @blur="saveProjectBudget" @keypress.enter="saveProjectBudget" />
               <span v-if="!isEditingOutcomes" @click="isEditingOutcomes = true" class="cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded">Outcomes: {{ activeProject.data.outcomes || 'N/A' }}</span>
-              <input
-                v-else
-                v-model="projectOutcomes"
-                type="text"
-                class="bg-transparent border border-gray-200 dark:border-gray-600 rounded p-1 text-gray-500 dark:text-gray-400"
-                @blur="saveProjectOutcomes"
-                @keypress.enter="saveProjectOutcomes"
-              />
+              <input v-else v-model="projectOutcomes" type="text" class="bg-transparent border border-gray-200 dark:border-gray-600 rounded p-1 text-gray-500 dark:text-gray-400" @blur="saveProjectOutcomes" @keypress.enter="saveProjectOutcomes" />
             </div>
           </div>
-
-          <!-- Gantt Chart -->
           <div class="flex-1 overflow-y-auto overflow-x-hidden">
-            <gantt :project="activeProject" :activities="projectActivities" :darkMode="darkMode" ref="gantt" @clear-selections="clearSelections" />
+            <gantt :project="activeProject" :activities="projectActivities" :dependencies="projectDependencies" :darkMode="darkMode" ref="gantt" @clear-selections="clearSelections" />
           </div>
         </div>
-
-        <!-- No Project Selected -->
         <div v-else class="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
           Select a project to view its Gantt chart.
         </div>
-
-        <!-- LLM Input (Bottom) -->
         <div v-if="activeProject" class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
           <div class="flex gap-3 items-center">
-            <textarea
-              v-model="draft"
-              rows="2"
-              class="flex-1 p-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:outline-none transition-all resize-none whitespace-pre-wrap"
-              :placeholder="inputPlaceholder"
-              @keypress.enter="handleEnterKey"
-            ></textarea>
-            <button
-              @click="sendMessage"
-              class="py-2 px-4 bg-blue-600 dark:bg-blue-500 dark:hover:bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all flex items-center"
-              :disabled="!draft?.trim() || !selectedModel || !activeProjectId || isSending"
-            >
+            <textarea v-model="draft" rows="2" class="flex-1 p-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:outline-none transition-all resize-none whitespace-pre-wrap" :placeholder="inputPlaceholder" @keypress.enter="handleEnterKey"></textarea>
+            <button @click="sendMessage" class="py-2 px-4 bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 text-white rounded-lg transition-all flex items-center" :disabled="!draft?.trim() || !selectedModel || !activeProjectId || isSending">
               <span v-if="!isSending">Generate</span>
               <span v-else class="flex items-center">
                 <svg class="animate-spin h-5 w-5 mr-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -167,20 +96,16 @@ export default {
 
       <!-- Chat Sidebar (Right) -->
       <div class="border-l border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300" :class="isChatOpen ? 'w-1/4' : 'w-12'">
-        <!-- Chat Header with Collapse Button -->
         <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex items-center justify-between">
           <h3 v-if="isChatOpen" class="text-lg font-semibold" :class="darkMode ? 'text-white' : 'text-gray-900'">Chat</h3>
           <button @click="toggleChat" class="text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400">
             <i :class="isChatOpen ? 'pi pi-chevron-right' : 'pi pi-chevron-left'"></i>
           </button>
         </div>
-
-        <!-- Chat Content -->
         <div v-if="isChatOpen" class="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900">
-          <!-- Chat Messages -->
           <div v-if="activeProject" class="flex-1 overflow-y-auto p-4">
             <div
-              v-for="chat in projectChats || []"
+              v-for="chat in projectChats"
               :key="chat.id"
               class="mb-2 p-2 rounded-lg"
               :class="chat.data.isResponse ? 'bg-gray-100 dark:bg-gray-800 mr-auto' : 'bg-gray-100 dark:bg-gray-700 ml-auto'"
@@ -195,26 +120,14 @@ export default {
               </div>
               <div class="text-sm" :class="darkMode ? 'text-gray-200' : 'text-gray-800'" v-html="renderMarkdown(chat.data.text)"></div>
             </div>
-            <div v-if="!(projectChats?.length > 0)" class="text-gray-500 dark:text-gray-400 text-sm text-center">
+            <div v-if="!projectChats?.length" class="text-gray-500 dark:text-gray-400 text-sm text-center">
               No chat messages yet.
             </div>
           </div>
-
-          <!-- Chat Input -->
           <div class="p-4 border-t border-gray-200 dark:border-gray-700">
             <div class="flex gap-3">
-              <textarea
-                v-model="chatDraft"
-                rows="1"
-                class="flex-1 p-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:outline-none transition-all resize-none whitespace-pre-wrap"
-                placeholder="Chat with team members..."
-                @keypress.enter="sendChatMessage"
-              ></textarea>
-              <button
-                @click="sendChatMessage"
-                class="py-2 px-4 bg-blue-600 dark:bg-blue-500 dark:hover:bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all"
-                :disabled="!chatDraft?.trim() || !activeProjectId"
-              >
+              <textarea v-model="chatDraft" rows="1" class="flex-1 p-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:outline-none transition-all resize-none whitespace-pre-wrap" placeholder="Chat with team members..." @keypress.enter="sendChatMessage"></textarea>
+              <button @click="sendChatMessage" class="py-2 px-4 bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 text-white rounded-lg transition-all" :disabled="!chatDraft?.trim() || !activeProjectId">
                 Send
               </button>
             </div>
@@ -230,8 +143,8 @@ export default {
     const { models } = useModels();
     const activeProjectId = Vue.ref(null);
     const selectedModel = Vue.ref(models.value.length > 0 ? models.value[0].model : '');
-    const draft = Vue.ref(''); // For LLM input
-    const chatDraft = Vue.ref(''); // For human chat
+    const draft = Vue.ref('');
+    const chatDraft = Vue.ref('');
     const isSending = Vue.ref(false);
     const isEditingProject = Vue.ref(null);
     const isEditingProjectName = Vue.ref(false);
@@ -245,64 +158,53 @@ export default {
     const isChatOpen = Vue.ref(true);
     const gantt = Vue.ref(null);
 
-    // Computed properties
     const activeProject = Vue.computed(() => {
-      console.log('Computing activeProject:', activeProjectId.value, entities.value?.projects);
-      const project = entities.value?.projects?.find(p => p.id === activeProjectId.value);
-      console.log('Found project:', project);
-      return project || null;
+      return entities.value?.projects?.find(p => p.id === activeProjectId.value) || null;
     });
 
     const projectActivities = Vue.computed(() => {
-      if (!activeProjectId.value) {
-        console.log('No active project ID, returning empty activities');
-        return [];
-      }
-      const activities = (entities.value.activities || [])
+      if (!activeProjectId.value) return [];
+      return (entities.value?.activities || [])
         .filter(a => a.data.project === activeProjectId.value)
         .sort((a, b) => new Date(a.data.startDate) - new Date(b.data.startDate));
-      console.log('Project activities:', activities);
-      return activities;
+    });
+
+    const projectDependencies = Vue.computed(() => {
+      if (!activeProjectId.value) return [];
+      return (entities.value?.dependencies || [])
+        .filter(d => projectActivities.value.some(a => a.id === d.data.sourceId || a.id === d.data.targetId));
     });
 
     const projectChats = Vue.computed(() => {
-      if (!activeProjectId.value) {
-        console.log('No active project ID, returning empty chats');
-        return [];
-      }
-      const chats = (entities.value.chats || [])
+      if (!activeProjectId.value) return [];
+      // Ensure entities.value and entities.value.chats are defined
+      const chats = entities.value?.chats || [];
+      return chats
         .filter(c => c.data.project === activeProjectId.value)
         .sort((a, b) => a.timestamp - b.timestamp);
-      console.log('Project chats:', chats);
-      return chats;
     });
 
     const inputPlaceholder = Vue.computed(() => {
       if (!activeProjectId.value) return 'Select a project to start planning...';
       if (gantt.value?.selectedActivityIds?.length) {
-        return 'Describe changes to selected activities (e.g., adjust dates, add dependencies)...';
+        return 'Describe changes to selected activities or dependencies...';
       }
-      return 'Describe your project or activities to generate a plan...';
+      return 'Describe your project, activities, or dependencies to generate a plan...';
     });
 
-    // Watch for project changes
     Vue.watch(
       () => entities.value?.projects,
       (projects) => {
-        console.log('Projects changed:', projects);
         if (projects?.length && !activeProjectId.value) {
           activeProjectId.value = projects[0].id;
-          console.log('Auto-selected project ID:', activeProjectId.value);
         }
       },
       { immediate: true }
     );
 
-    // Watch for active project changes to update editable fields
     Vue.watch(
       () => activeProject.value,
       (newProject) => {
-        console.log('Active project changed:', newProject);
         if (newProject) {
           projectName.value = newProject.data.name;
           projectDescription.value = newProject.data.description || '';
@@ -313,11 +215,9 @@ export default {
       { immediate: true }
     );
 
-    // Watch for model changes
     Vue.watch(
       () => models.value,
       (newModels) => {
-        console.log('Models changed:', newModels);
         if (newModels?.length && !selectedModel.value) {
           selectedModel.value = newModels[0].model;
         }
@@ -325,29 +225,24 @@ export default {
       { immediate: true }
     );
 
-    // Project management
     function addProject() {
-      console.log('Adding new project');
       const id = addEntity('projects', {
-        name: `Project ${entities.value.projects.length + 1}`,
+        name: `Project ${entities.value?.projects?.length + 1 || 1}`,
         description: '',
         budget: null,
         outcomes: '',
         llmResponses: [],
         llmLastResponse: null,
       });
-      console.log('New project ID:', id);
       activeProjectId.value = id;
     }
 
     function selectProject(id) {
-      console.log('Selecting project with ID:', id);
       activeProjectId.value = id;
       isEditingProject.value = null;
     }
 
     function editProjectName(project) {
-      console.log('Editing project name:', project.id);
       isEditingProject.value = project.id;
       Vue.nextTick(() => {
         const input = document.querySelector(`#project-input-${project.id}`);
@@ -356,7 +251,6 @@ export default {
     }
 
     function updateProject(project) {
-      console.log('Updating project:', project.id);
       updateEntity('projects', project.id, {
         ...project.data,
         name: project.data.name,
@@ -365,23 +259,22 @@ export default {
     }
 
     function deleteProject(id) {
-      console.log('Deleting project:', id);
-      entities.value.activities
+      (entities.value?.activities || [])
         .filter(a => a.data.project === id)
         .forEach(a => removeEntity('activities', a.id));
-      entities.value.chats
+      (entities.value?.dependencies || [])
+        .filter(d => projectActivities.value.some(a => a.id === d.data.sourceId || a.id === d.data.targetId))
+        .forEach(d => removeEntity('dependencies', d.id));
+      (entities.value?.chats || [])
         .filter(c => c.data.project === id)
         .forEach(c => removeEntity('chats', c.id));
       removeEntity('projects', id);
       if (activeProjectId.value === id) {
-        activeProjectId.value = entities.value.projects[0]?.id || null;
-        console.log('Active project ID after deletion:', activeProjectId.value);
+        activeProjectId.value = entities.value?.projects?.[0]?.id || null;
       }
     }
 
-    // Inline editing for project details
     function saveProjectName() {
-      console.log('Saving project name:', projectName.value);
       updateEntity('projects', activeProjectId.value, {
         ...activeProject.value.data,
         name: projectName.value,
@@ -390,7 +283,6 @@ export default {
     }
 
     function saveProjectDescription() {
-      console.log('Saving project description:', projectDescription.value);
       updateEntity('projects', activeProjectId.value, {
         ...activeProject.value.data,
         description: projectDescription.value,
@@ -399,7 +291,6 @@ export default {
     }
 
     function saveProjectBudget() {
-      console.log('Saving project budget:', projectBudget.value);
       updateEntity('projects', activeProjectId.value, {
         ...activeProject.value.data,
         budget: projectBudget.value ? parseFloat(projectBudget.value) : null,
@@ -408,7 +299,6 @@ export default {
     }
 
     function saveProjectOutcomes() {
-      console.log('Saving project outcomes:', projectOutcomes.value);
       updateEntity('projects', activeProjectId.value, {
         ...activeProject.value.data,
         outcomes: projectOutcomes.value,
@@ -416,13 +306,12 @@ export default {
       isEditingOutcomes.value = false;
     }
 
-    // Export project as JSON
     function exportProject() {
       if (!activeProject.value) return;
-      console.log('Exporting project:', activeProject.value.data.name);
       const exportData = {
         project: activeProject.value.data,
         activities: projectActivities.value.map(a => a.data),
+        dependencies: projectDependencies.value.map(d => d.data),
       };
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -433,7 +322,6 @@ export default {
       URL.revokeObjectURL(url);
     }
 
-    // Markdown rendering
     function renderMarkdown(content) {
       if (!content) return '';
       try {
@@ -457,13 +345,11 @@ export default {
       }
     }
 
-    // Format timestamp
     function formatTime(timestamp) {
       if (!timestamp) return '';
       return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
-    // Handle Enter key for LLM input
     function handleEnterKey(event) {
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
@@ -471,56 +357,38 @@ export default {
       }
     }
 
-    // Send human-to-human chat message
     function sendChatMessage(event) {
       if (event?.key === 'Enter' && !event?.shiftKey) {
         event.preventDefault();
       }
-      if (!chatDraft.value.trim() || !activeProjectId.value) {
-        console.log('Cannot send chat message:', { chatDraft: chatDraft.value, activeProjectId: activeProjectId.value });
-        return;
-      }
-
-      console.log('Sending chat message:', chatDraft.value);
+      if (!chatDraft.value.trim() || !activeProjectId.value) return;
       addEntity('chats', {
         project: activeProjectId.value,
         text: chatDraft.value,
         userName: displayName.value,
         isResponse: false,
       });
-
       chatDraft.value = '';
     }
 
-    // Toggle chat sidebar
     function toggleChat() {
-      console.log('Toggling chat sidebar, current state:', isChatOpen.value);
       isChatOpen.value = !isChatOpen.value;
-      console.log('Chat sidebar state after toggle:', isChatOpen.value);
     }
 
-    // Send message to LLM
     function sendMessage() {
-      if (!draft.value.trim() || !selectedModel.value || !activeProjectId.value || isSending.value) {
-        console.log('Cannot send message:', { draft: draft.value, selectedModel: selectedModel.value, activeProjectId: activeProjectId.value, isSending: isSending.value });
-        return;
-      }
+      if (!draft.value.trim() || !selectedModel.value || !activeProjectId.value || isSending.value) return;
       isSending.value = true;
-      console.log('Sending LLM message:', draft.value);
 
-      // Initialize llmLastResponse
       updateEntity('projects', activeProjectId.value, {
         ...activeProject.value.data,
         llmLastResponse: { text: '', isStreaming: true, timestamp: Date.now() },
       });
 
-      // Build message history
       const messageHistory = [];
       const selectedActivities = gantt.value?.selectedActivityIds?.length
         ? projectActivities.value.filter(a => gantt.value.selectedActivityIds.includes(a.id))
         : [];
 
-      // Add context about the project and activities
       messageHistory.push({
         role: 'user',
         content: `Current project: ${JSON.stringify(activeProject.value.data)}`,
@@ -531,33 +399,39 @@ export default {
           content: `Current activities: ${JSON.stringify(projectActivities.value.map(a => a.data))}`,
         });
       }
+      if (projectDependencies.value.length) {
+        messageHistory.push({
+          role: 'user',
+          content: `Current dependencies: ${JSON.stringify(projectDependencies.value.map(d => d.data))}`,
+        });
+      }
 
-      // Add JSON instruction based on selection
       const jsonInstruction = selectedActivities.length
-        ? `Based on the user's input, modify the selected activities. Return a JSON object with:
-- activitiesToAdd: Array of new activities ({name, startDate, endDate, owner, dependencies: [{dependencyId, dependencyType}]})
-- activitiesToUpdate: Array of updates for existing activities ({id, name, startDate, endDate, owner, dependencies, status})
+        ? `Based on the user's input, modify the selected activities or dependencies. Return a JSON object with:
+- activitiesToAdd: Array of new activities ({name, startDate, endDate, owner, description})
+- activitiesToUpdate: Array of updates for existing activities ({id, name, startDate, endDate, owner, description, status})
 - activitiesToDelete: Array of activity IDs to delete
+- dependenciesToAdd: Array of new dependencies ({sourceId, targetId, dependencyType})
+- dependenciesToUpdate: Array of updates for existing dependencies ({id, sourceId, targetId, dependencyType})
+- dependenciesToDelete: Array of dependency IDs to delete
 Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. Only modify the selected activities: ${JSON.stringify(selectedActivities.map(a => a.data))}. Return ONLY JSON, no additional text.`
         : `Based on the user's input, generate or modify a project plan. Return a JSON object with:
 - project: Optional project details ({name, description, outcomes, budget})
-- activities: Array of activities ({name, startDate, endDate, owner, dependencies: [{dependencyId, dependencyType}]})
-Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. Return ONLY JSON, no additional text.`;
+- activities: Array of activities ({name, startDate, endDate, owner, description})
+- dependencies: Array of dependencies ({sourceId, targetId, dependencyType})
+Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. Use activity names as temporary IDs for dependencies; they will be mapped to actual IDs. Return ONLY JSON, no additional text.`;
 
-      // Add user input with JSON instruction
       messageHistory.push({
         role: 'user',
         content: `${draft.value}\n\n${jsonInstruction}`,
       });
 
-      // Trigger LLM with the correct project ID
       const model = models.value.find(m => m.model === selectedModel.value) || {
         provider: 'xai',
         name: 'grok-3',
         model: 'grok-3',
       };
       try {
-        console.log('Triggering LLM with project ID:', activeProjectId.value);
         triggerLLM('projects', activeProjectId.value, {
           provider: model.provider,
           name: model.name.en,
@@ -580,11 +454,8 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. R
       }
     }
 
-    // Handle LLM draft
     function handleLLMDraft(eventObj) {
       if (eventObj.data.entityType !== 'projects' || !activeProject.value || eventObj.id !== activeProjectId.value) return;
-
-      console.log('Handling LLM draft for project:', activeProjectId.value);
       const currentResponse = activeProject.value.data.llmLastResponse || { text: '', isStreaming: true, timestamp: Date.now() };
       const updatedText = (currentResponse.text || '') + eventObj.data.content;
       updateEntity('projects', activeProjectId.value, {
@@ -597,11 +468,8 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. R
       });
     }
 
-    // Handle LLM end
     function handleLLMEnd(eventObj) {
       if (eventObj.data.entityType !== 'projects' || !activeProject.value || eventObj.id !== activeProjectId.value) return;
-
-      console.log('Handling LLM end for project:', activeProjectId.value);
       const currentResponse = activeProject.value.data.llmLastResponse;
       if (!currentResponse) return;
 
@@ -616,9 +484,7 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. R
 
       try {
         const parsed = JSON5.parse(responseText);
-        console.log('Parsed LLM response:', parsed);
 
-        // Update project details
         if (parsed.project) {
           updateEntity('projects', activeProjectId.value, {
             ...activeProject.value.data,
@@ -642,23 +508,18 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. R
           activeProject.value.data.llmLastResponse = null;
         }
 
-        // Create a mapping of LLM-generated dependency IDs to actual activity UUIDs
         const activityIdMapping = {};
         const tempActivities = [];
 
-        // Handle activities (store temporarily before adding)
         if (parsed.activities) {
           parsed.activities.forEach((act, index) => {
             const newId = addEntity('activities', {
               project: activeProjectId.value,
               ...act,
-              dependencies: [], // Temporarily clear dependencies
             });
-            tempActivities.push({ id: newId, name: act.name, originalIndex: index, dependencies: act.dependencies || [] });
+            tempActivities.push({ id: newId, name: act.name, originalIndex: index });
             activityIdMapping[index] = newId;
-            if (act.name) {
-              activityIdMapping[act.name] = newId;
-            }
+            if (act.name) activityIdMapping[act.name] = newId;
           });
         }
 
@@ -667,76 +528,22 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. R
             const newId = addEntity('activities', {
               project: activeProjectId.value,
               ...act,
-              dependencies: [], // Temporarily clear dependencies
             });
-            tempActivities.push({ id: newId, name: act.name, originalIndex: index + (parsed.activities ? parsed.activities.length : 0), dependencies: act.dependencies || [] });
+            tempActivities.push({ id: newId, name: act.name, originalIndex: index + (parsed.activities ? parsed.activities.length : 0) });
             activityIdMapping[index + (parsed.activities ? parsed.activities.length : 0)] = newId;
-            if (act.name) {
-              activityIdMapping[act.name] = newId;
-            }
+            if (act.name) activityIdMapping[act.name] = newId;
           });
         }
 
-        // Now update dependencies for all activities
-        tempActivities.forEach(activity => {
-          if (activity.dependencies && Array.isArray(activity.dependencies)) {
-            const updatedDependencies = activity.dependencies.map(dep => {
-              let newDependencyId = dep.dependencyId;
-              // If dependencyId is a number, treat it as an index
-              if (!isNaN(dep.dependencyId)) {
-                const index = parseInt(dep.dependencyId);
-                newDependencyId = activityIdMapping[index];
-              }
-              // If dependencyId is a string, treat it as a name
-              else if (typeof dep.dependencyId === 'string') {
-                newDependencyId = activityIdMapping[dep.dependencyId];
-              }
-              return {
-                ...dep,
-                dependencyId: newDependencyId || dep.dependencyId, // Fallback to original if not found
-              };
-            }).filter(dep => dep.dependencyId && dep.dependencyId !== activity.id); // Skip self-referencing dependencies
-
-            // Update the activity with the new dependencies
-            updateEntity('activities', activity.id, {
-              ...entities.value.activities.find(a => a.id === activity.id).data,
-              dependencies: updatedDependencies,
-            });
-
-            // Update entities.value.activities to trigger reactivity
-            const index = entities.value.activities.findIndex(a => a.id === activity.id);
-            if (index !== -1) {
-              entities.value.activities[index].data.dependencies = updatedDependencies;
-            }
-          }
-        });
-
         if (parsed.activitiesToUpdate) {
           parsed.activitiesToUpdate.forEach(update => {
-            const act = entities.value.activities.find(a => a.id === update.id);
+            const act = entities.value?.activities?.find(a => a.id === update.id);
             if (act) {
-              console.log('Updating activity:', update);
-              // Map dependencies in activitiesToUpdate
-              if (update.dependencies && Array.isArray(update.dependencies)) {
-                update.dependencies = update.dependencies.map(dep => {
-                  let newDependencyId = dep.dependencyId;
-                  if (!isNaN(dep.dependencyId)) {
-                    newDependencyId = activityIdMapping[parseInt(dep.dependencyId)];
-                  } else if (typeof dep.dependencyId === 'string') {
-                    newDependencyId = activityIdMapping[dep.dependencyId];
-                  }
-                  return {
-                    ...dep,
-                    dependencyId: newDependencyId || dep.dependencyId,
-                  };
-                }).filter(dep => dep.dependencyId && dep.dependencyId !== update.id); // Skip self-referencing
-              }
               updateEntity('activities', update.id, {
                 ...act.data,
                 ...update,
               });
-              // Update entities.value.activities to trigger reactivity
-              const index = entities.value.activities.findIndex(a => a.id === update.id);
+              const index = entities.value?.activities?.findIndex(a => a.id === update.id) ?? -1;
               if (index !== -1) {
                 entities.value.activities[index] = {
                   ...entities.value.activities[index],
@@ -746,19 +553,97 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. R
                   },
                 };
               }
-            } else {
-              console.warn('Activity not found for update:', update.id);
             }
           });
         }
 
         if (parsed.activitiesToDelete) {
           parsed.activitiesToDelete.forEach(id => {
-            if (entities.value.activities.some(a => a.id === id)) {
-              console.log('Deleting activity:', id);
+            if (entities.value?.activities?.some(a => a.id === id)) {
               removeEntity('activities', id);
-              // Update entities.value.activities to trigger reactivity
-              entities.value.activities = entities.value.activities.filter(a => a.id !== id);
+              entities.value.activities = (entities.value?.activities || []).filter(a => a.id !== id);
+            }
+          });
+        }
+
+        if (parsed.dependencies) {
+          parsed.dependencies.forEach(dep => {
+            let sourceId = dep.sourceId;
+            let targetId = dep.targetId;
+            if (!isNaN(dep.sourceId)) sourceId = activityIdMapping[parseInt(dep.sourceId)];
+            else if (typeof dep.sourceId === 'string') sourceId = activityIdMapping[dep.sourceId];
+            if (!isNaN(dep.targetId)) targetId = activityIdMapping[parseInt(dep.targetId)];
+            else if (typeof dep.targetId === 'string') targetId = activityIdMapping[dep.targetId];
+
+            if (sourceId && targetId && sourceId !== targetId) {
+              addEntity('dependencies', {
+                sourceId,
+                targetId,
+                dependencyType: dep.dependencyType,
+              });
+            }
+          });
+        }
+
+        if (parsed.dependenciesToAdd) {
+          parsed.dependenciesToAdd.forEach(dep => {
+            let sourceId = dep.sourceId;
+            let targetId = dep.targetId;
+            if (!isNaN(dep.sourceId)) sourceId = activityIdMapping[parseInt(dep.sourceId)];
+            else if (typeof dep.sourceId === 'string') sourceId = activityIdMapping[dep.sourceId];
+            if (!isNaN(dep.targetId)) targetId = activityIdMapping[parseInt(dep.targetId)];
+            else if (typeof dep.targetId === 'string') targetId = activityIdMapping[dep.targetId];
+
+            if (sourceId && targetId && sourceId !== targetId) {
+              addEntity('dependencies', {
+                sourceId,
+                targetId,
+                dependencyType: dep.dependencyType,
+              });
+            }
+          });
+        }
+
+        if (parsed.dependenciesToUpdate) {
+          parsed.dependenciesToUpdate.forEach(update => {
+            const dep = entities.value?.dependencies?.find(d => d.id === update.id);
+            if (dep) {
+              let sourceId = update.sourceId;
+              let targetId = update.targetId;
+              if (!isNaN(update.sourceId)) sourceId = activityIdMapping[parseInt(update.sourceId)];
+              else if (typeof update.sourceId === 'string') sourceId = activityIdMapping[update.sourceId];
+              if (!isNaN(update.targetId)) targetId = activityIdMapping[parseInt(update.targetId)];
+              else if (typeof update.targetId === 'string') targetId = activityIdMapping[update.targetId];
+
+              if (sourceId && targetId && sourceId !== targetId) {
+                updateEntity('dependencies', update.id, {
+                  ...dep.data,
+                  sourceId,
+                  targetId,
+                  dependencyType: update.dependencyType,
+                });
+                const index = entities.value?.dependencies?.findIndex(d => d.id === update.id) ?? -1;
+                if (index !== -1) {
+                  entities.value.dependencies[index] = {
+                    ...entities.value.dependencies[index],
+                    data: {
+                      ...entities.value.dependencies[index].data,
+                      sourceId,
+                      targetId,
+                      dependencyType: update.dependencyType,
+                    },
+                  };
+                }
+              }
+            }
+          });
+        }
+
+        if (parsed.dependenciesToDelete) {
+          parsed.dependenciesToDelete.forEach(id => {
+            if (entities.value?.dependencies?.some(d => d.id === id)) {
+              removeEntity('dependencies', id);
+              entities.value.dependencies = (entities.value?.dependencies || []).filter(d => d.id !== id);
             }
           });
         }
@@ -777,26 +662,20 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. R
         });
       }
 
-      // Clear selections after LLM response
       if (gantt.value) {
         gantt.value.clearSelections();
       }
-
       isSending.value = false;
     }
 
-    // Clear selections in Gantt
     function clearSelections() {
       if (gantt.value) {
         gantt.value.clearSelections();
       }
     }
 
-    // Register LLM event handlers
     const { on } = useRealTime();
     Vue.onMounted(() => {
-      console.log('Projects component mounted');
-      console.log('Initial entities:', entities.value);
       on('history-llm-draft', handleLLMDraft);
       on('history-llm-end', handleLLMEnd);
     });
@@ -819,6 +698,7 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. R
       projectOutcomes,
       activeProject,
       projectActivities,
+      projectDependencies,
       projectChats,
       inputPlaceholder,
       isChatOpen,

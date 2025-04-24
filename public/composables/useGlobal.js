@@ -6,6 +6,7 @@ const entities = Vue.ref({
     projects: [],
     activities: [],
     chats: [],
+    dependencies: [],
   });
   
   // Derive entityTypes from the keys of entities

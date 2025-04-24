@@ -1,4 +1,5 @@
 import { useHistory } from '../composables/useHistory.js';
+import { useGlobal } from '../composables/useGlobal.js';
 
 export default {
   name: 'Gantt',
@@ -11,6 +12,10 @@ export default {
       type: Array,
       required: true,
     },
+    dependencies: {
+      type: Array,
+      required: true,
+    },
     darkMode: {
       type: Boolean,
       default: false,
@@ -18,23 +23,108 @@ export default {
   },
   template: `
     <div class="relative flex-1 bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
-      <!-- Scrollable Container for Both Header and Body -->
+      <!-- Modal for Activity Editing -->
+      <div v-if="showActivityModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg w-1/3">
+          <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Edit Activity</h3>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Name</label>
+              <input v-model="modalActivity.name" type="text" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Owner</label>
+              <input v-model="modalActivity.owner" type="text" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+              <textarea v-model="modalActivity.description" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"></textarea>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date</label>
+              <input v-model="modalActivity.startDate" type="date" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date</label>
+              <input v-model="modalActivity.endDate" type="date" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
+            </div>
+          </div>
+          <div class="mt-6 flex justify-end space-x-2">
+            <button @click="closeActivityModal" class="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-gray-100 rounded">Cancel</button>
+            <button @click="saveActivityModal" class="px-4 py-2 bg-blue-600 text-white rounded">Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal for Dependency Editing -->
+      <div v-if="showDependencyModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg w-1/2 max-h-[80vh] overflow-y-auto">
+          <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Manage Dependencies</h3>
+          <table class="w-full mb-4">
+            <thead>
+              <tr>
+                <th class="text-left p-2 text-gray-700 dark:text-gray-300">Source</th>
+                <th class="text-left p-2 text-gray-700 dark:text-gray-300">Target</th>
+                <th class="text-left p-2 text-gray-700 dark:text-gray-300">Type</th>
+                <th class="text-left p-2 text-gray-700 dark:text-gray-300">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="dep in sortedDependencies" :key="dep.id" class="border-t border-gray-200 dark:border-gray-700">
+                <td class="p-2 text-gray-900 dark:text-gray-100">{{ getActivityName(dep.data.sourceId) }}</td>
+                <td class="p-2 text-gray-900 dark:text-gray-100">{{ getActivityName(dep.data.targetId) }}</td>
+                <td class="p-2 text-gray-900 dark:text-gray-100">{{ dep.data.dependencyType }}</td>
+                <td class="p-2">
+                  <button @click="editDependency(dep)" class="text-blue-500 mr-2">Edit</button>
+                  <button @click="deleteDependency(dep.id)" class="text-red-500">Delete</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Source Activity</label>
+              <select v-model="modalDependency.sourceId" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100">
+                <option v-for="act in sortedActivities" :value="act.id">{{ act.data.name }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Target Activity</label>
+              <select v-model="modalDependency.targetId" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100">
+                <option v-for="act in sortedActivities" :value="act.id">{{ act.data.name }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Dependency Type</label>
+              <select v-model="modalDependency.dependencyType" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100">
+                <option value="FS">Finish-to-Start (FS)</option>
+                <option value="FF">Finish-to-Finish (FF)</option>
+                <option value="SS">Start-to-Start (SS)</option>
+                <option value="SF">Start-to-Finish (SF)</option>
+              </select>
+            </div>
+          </div>
+          <div class="mt-6 flex justify-end space-x-2">
+            <button @click="closeDependencyModal" class="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-gray-100 rounded">Cancel</button>
+            <button @click="saveDependencyModal" class="px-4 py-2 bg-blue-600 text-white rounded">Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scrollable Container -->
       <div class="relative flex">
         <!-- Sticky Left Column -->
         <div class="w-48 flex-shrink-0 z-20">
-          <div class="w-48 h-10"></div> <!-- Placeholder for header -->
+          <div class="w-48 h-10 sticky top-0 bg-gray-50 dark:bg-gray-900 flex items-center justify-between px-2">
+            <span class="font-semibold text-gray-800 dark:text-gray-200">Activities</span>
+            <button @click="showDependencyModal = true" class="text-blue-500">
+              <i class="pi pi-list-check"></i>
+            </button>
+          </div>
           <div v-for="(activity, index) in sortedActivities" :key="activity.id" class="border-b border-gray-200 dark:border-gray-700 h-16 flex items-center">
             <div class="w-48 p-2 bg-gray-50 dark:bg-gray-900">
               <div class="flex items-center justify-between">
-                <span v-if="!editingActivityId || editingActivityId !== activity.id" @click="editActivityName(activity.id, activity.data.name)" class="text-gray-800 dark:text-gray-200 font-medium truncate cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded" :title="activity.data.name">{{ activity.data.name }}</span>
-                <input
-                  v-else
-                  v-model="editingActivityName"
-                  type="text"
-                  class="bg-transparent text-gray-800 dark:text-gray-200 font-medium outline-none border border-gray-200 dark:border-gray-600 rounded p-1 w-full"
-                  @blur="saveActivityName(activity.id)"
-                  @keypress.enter="saveActivityName(activity.id)"
-                />
+                <span @click="openActivityModal(activity)" class="text-gray-800 dark:text-gray-200 font-medium truncate cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded" :title="activity.data.name">{{ activity.data.name }}</span>
                 <input type="checkbox" v-model="selectedActivityIds" :value="activity.id" class="ml-2" @click.shift="handleShiftSelect(index, $event)" />
               </div>
               <div class="text-xs text-gray-500 dark:text-gray-400">
@@ -43,15 +133,15 @@ export default {
               </div>
             </div>
           </div>
-          <div v-if="!activities.length" class="text-center text-gray-500 dark:text-gray-400 py-12">
-            No activities in this project. Use the input below to generate some!
+          <div v-if="!sortedActivities?.length" class="text-center text-gray-500 dark:text-gray-400 py-12">
+            No activities in this project.
           </div>
         </div>
 
         <!-- Scrollable Gantt Chart -->
         <div ref="ganttContainer" class="flex-1 overflow-x-auto overflow-y-auto relative" @scroll="updateScrollPosition">
           <!-- Gantt Chart Header (Timeline) -->
-          <div class="flex border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 bg-gray-50 dark:bg-gray-900" :style="{ minWidth: ganttWidth + 'px' }">
+          <div class="flex border-b border-gray-200 dark:border-gray-700 sticky top-0 z-30 bg-gray-50 dark:bg-gray-900" :style="{ minWidth: ganttWidth + 'px' }">
             <div class="flex-1">
               <div class="flex text-sm text-gray-600 dark:text-gray-300 font-medium">
                 <div v-for="date in timeline" :key="date" class="flex-1 text-center py-2 whitespace-nowrap" :style="{ minWidth: dateWidth + 'px' }">
@@ -62,58 +152,84 @@ export default {
           </div>
 
           <!-- Gantt Chart Body -->
-          <div ref="ganttBody" :style="{ minWidth: ganttWidth + 'px' }">
-            <div v-for="(activity, index) in sortedActivities" :key="activity.id" class="relative h-16 border-b border-gray-200 dark:border-gray-700">
-              <!-- Background Grid -->
-              <div class="absolute inset-0 flex">
-                <div
-                  v-for="date in timeline"
-                  :key="date"
-                  class="flex-1 border-l border-gray-200 dark:border-gray-700"
-                  :style="{ minWidth: dateWidth + 'px' }"
-                ></div>
-              </div>
-              <!-- Gantt Bar/Diamond -->
-              <div class="relative h-16">
-                <div
-                  v-if="isSingleDay(activity)"
-                  :id="'gantt-element-' + activity.id"
-                  class="absolute h-6 w-6 transform rotate-45 border border-gray-300 dark:border-gray-600"
-                  :style="diamondStyle(activity)"
-                  :class="{ 'bg-green-500 dark:bg-green-400': activity.data.status === 'completed', 'bg-yellow-500 dark:bg-yellow-400': selectedActivityIds.includes(activity.id), 'bg-blue-500 dark:bg-blue-400': !selectedActivityIds.includes(activity.id) && activity.data.status !== 'completed' }"
-                  @click="toggleSelection(activity.id)"
-                  :title="activity.data.name"
-                ></div>
-                <div
-                  v-else
-                  :id="'gantt-element-' + activity.id"
-                  class="absolute h-6 rounded"
-                  :style="barStyle(activity)"
-                  :class="barClasses(activity)"
-                  @click="toggleSelection(activity.id)"
-                  :title="activity.data.name"
-                ></div>
-              </div>
-            </div>
-
-            <!-- Dependency Arrows (Using SVG) -->
-            <svg ref="svgContainer" class="absolute top-0 left-0 pointer-events-none z-20" :style="{ transform: 'translate(0px, ' + headerHeight + 'px)' }" :width="ganttWidth" :height="ganttHeight">
+          <div ref="ganttBody" :style="{ minWidth: ganttWidth + 'px', height: ganttHeight + 'px' }">
+            <svg :width="ganttWidth" :height="ganttHeight" class="absolute top-0 left-0" ref="svgContainer" @mousedown="startPan">
               <defs>
-                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
-                  <polygon points="0 0, 10 3.5, 0 7" fill="currentColor" class="text-gray-500 dark:text-gray-400" />
+                <marker id="circleMarker" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+                  <circle cx="3" cy="3" r="3" fill="currentColor" class="text-gray-500 dark:text-gray-400" />
                 </marker>
               </defs>
-              <path
-                v-for="dep in staticDependencies"
-                :key="dep.id"
-                :d="dep.path"
-                stroke="currentColor"
-                stroke-width="2"
-                fill="none"
-                class="text-gray-500 dark:text-gray-400"
-                marker-end="url(#arrowhead)"
-                :class="{ 'text-red-500 dark:text-red-600': dep.conflict }"
-              />
+              <!-- Background Grid -->
+              <g class="grid">
+                <line v-for="date in timeline" :key="date" :x1="getPosition(date)" :x2="getPosition(date)" :y1="0" :y2="ganttHeight" class="stroke-gray-200 dark:stroke-gray-700" stroke-width="1" />
+                <line v-for="n in sortedActivities?.length" :key="'h'+n" :x1="0" :x2="ganttWidth" :y1="n*64 + 40" :y2="n*64 + 40" class="stroke-gray-200 dark:stroke-gray-700" stroke-width="1" />
+              </g>
+              <!-- Gantt Bars -->
+              <g>
+                <g v-for="(activity, index) in sortedActivities" :key="activity.id">
+                  <rect
+                    v-if="!isSingleDay(activity)"
+                    :id="'gantt-element-' + activity.id"
+                    :x="getPosition(activity.data.startDate)"
+                    :y="index * 64 + 60"
+                    :width="getPosition(activity.data.endDate || activity.data.startDate) - getPosition(activity.data.startDate)"
+                    :height="16"
+                    :fill="getBarFill(activity)"
+                    @mousedown="startDrag($event, activity.id, 'bar')"
+                    @click="toggleSelection(activity.id)"
+                    :title="activity.data.name"
+                    rx="2"
+                    class="cursor-move"
+                  />
+                  <rect
+                    v-if="!isSingleDay(activity)"
+                    :x="getPosition(activity.data.startDate) - 4"
+                    :y="index * 64 + 60"
+                    width="8"
+                    height="16"
+                    fill="transparent"
+                    @mousedown="startDrag($event, activity.id, 'start')"
+                    class="cursor-w-resize"
+                  />
+                  <rect
+                    v-if="!isSingleDay(activity)"
+                    :x="getPosition(activity.data.endDate || activity.data.startDate) - 4"
+                    :y="index * 64 + 60"
+                    width="8"
+                    height="16"
+                    fill="transparent"
+                    @mousedown="startDrag($event, activity.id, 'end')"
+                    class="cursor-e-resize"
+                  />
+                  <rect
+                    v-if="isSingleDay(activity)"
+                    :id="'gantt-element-' + activity.id"
+                    :x="getPosition(activity.data.startDate) - 12"
+                    :y="index * 64 + 60"
+                    width="24"
+                    height="24"
+                    transform="rotate(45)"
+                    :fill="getBarFill(activity)"
+                    @mousedown="startDrag($event, activity.id, 'bar')"
+                    @click="toggleSelection(activity.id)"
+                    :title="activity.data.name"
+                    class="cursor-move"
+                  />
+                </g>
+              </g>
+              <!-- Dependency Paths -->
+              <g>
+                <path
+                  v-for="dep in dependencyPaths"
+                  :key="dep.id"
+                  :d="dep.path"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  fill="none"
+                  marker-end="url(#circleMarker)"
+                  :class="{ 'text-red-500 dark:text-red-600': dep.conflict, 'text-gray-500 dark:text-gray-400': !dep.conflict }"
+                />
+              </g>
             </svg>
           </div>
         </div>
@@ -121,22 +237,35 @@ export default {
     </div>
   `,
   setup(props, { emit }) {
-    const { updateEntity } = useHistory();
+    const { updateEntity, addEntity, removeEntity } = useHistory();
+    const { entities } = useGlobal();
     const selectedActivityIds = Vue.ref([]);
-    const editingActivityId = Vue.ref(null);
-    const editingActivityName = Vue.ref('');
-    const sortedActivities = Vue.computed(() => [...props.activities].sort((a, b) => new Date(a.data.startDate) - new Date(b.data.startDate)));
     const ganttContainer = Vue.ref(null);
     const ganttBody = Vue.ref(null);
     const svgContainer = Vue.ref(null);
-    const staticDependencies = Vue.ref([]);
+    const dependencyPaths = Vue.ref([]);
     const scrollLeft = Vue.ref(0);
     const scrollTop = Vue.ref(0);
     const timelineScale = Vue.ref('days');
     const availableWidth = Vue.ref(800);
-    const headerHeight = 40; // Height of the timeline header
+    const dragging = Vue.ref(null);
+    const showActivityModal = Vue.ref(false);
+    const showDependencyModal = Vue.ref(false);
+    const modalActivity = Vue.ref({});
+    const modalDependency = Vue.ref({});
 
-    // Custom debounce function
+    const sortedActivities = Vue.computed(() => 
+      [...props.activities]
+        .filter(activity => activity && activity.data && activity.data.startDate)
+        .sort((a, b) => new Date(a.data.startDate) - new Date(b.data.startDate))
+    );
+
+    const sortedDependencies = Vue.computed(() => 
+      [...props.dependencies]
+        .filter(dep => dep && dep.data && dep.data.sourceId && dep.data.targetId)
+        .sort((a, b) => a.id.localeCompare(b.id))
+    );
+
     function debounce(fn, wait) {
       let timeout;
       return (...args) => {
@@ -145,7 +274,6 @@ export default {
       };
     }
 
-    // Debounced resize handler
     const updateAvailableWidthDebounced = debounce(() => {
       updateAvailableWidth();
     }, 100);
@@ -158,12 +286,16 @@ export default {
       if (ganttContainer.value) {
         resizeObserver.observe(ganttContainer.value);
       }
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
     });
 
     Vue.onUnmounted(() => {
       if (ganttContainer.value) {
         resizeObserver.unobserve(ganttContainer.value);
       }
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
     });
 
     function updateAvailableWidth() {
@@ -173,30 +305,33 @@ export default {
       }
     }
 
-    // Timeline generation
     const timeline = Vue.computed(() => {
       if (!props.activities.length) return [];
       const dates = [];
-      const startDates = props.activities.map(a => new Date(a.data.startDate).getTime());
+      const startDates = props.activities
+        .filter(a => a && a.data && a.data.startDate)
+        .map(a => new Date(a.data.startDate).getTime());
       const endDates = props.activities
-        .filter(a => a.data.endDate)
+        .filter(a => a && a.data && a.data.endDate)
         .map(a => new Date(a.data.endDate).getTime());
-      const minDate = Math.min(...startDates, ...endDates, Date.now());
-      const maxDate = Math.max(...startDates, ...endDates, Date.now());
-      const buffer = 2 * 24 * 60 * 60 * 1000; // 2 days
+      const minDate = startDates.length ? Math.min(...startDates) : Date.now();
+      const maxDate = endDates.length ? Math.max(...endDates) : Date.now();
+      const bufferDays = 30; // Increased buffer to ensure timeline extends beyond last end date
+      const buffer = bufferDays * 24 * 60 * 60 * 1000;
+      const cappedMinDate = minDate - buffer;
       const cappedMaxDate = maxDate + buffer;
-      const diffTime = cappedMaxDate - minDate;
+      const diffTime = cappedMaxDate - cappedMinDate;
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
       const pixelsPerDay = availableWidth.value / diffDays;
       let interval;
-      if (pixelsPerDay > 20) { // Adjusted threshold for days
+      if (pixelsPerDay > 20) {
         timelineScale.value = 'days';
-        interval = 1000 * 60 * 60 * 24; // 1 day
-      } else if (pixelsPerDay > 5) { // Adjusted threshold for weeks
+        interval = 1000 * 60 * 60 * 24;
+      } else if (pixelsPerDay > 5) {
         timelineScale.value = 'weeks';
-        interval = 1000 * 60 * 60 * 24 * 7; // 1 week
-      } else if (pixelsPerDay > 1) { // Adjusted threshold for months
+        interval = 1000 * 60 * 60 * 24 * 7;
+      } else if (pixelsPerDay > 1) {
         timelineScale.value = 'months';
         interval = null;
       } else {
@@ -207,21 +342,21 @@ export default {
       if (timelineScale.value === 'days' || timelineScale.value === 'weeks') {
         const steps = Math.ceil(diffTime / interval);
         for (let i = 0; i <= steps; i++) {
-          const nextDate = new Date(minDate + i * interval);
+          const nextDate = new Date(cappedMinDate + i * interval);
           if (nextDate.getTime() <= cappedMaxDate) {
             dates.push(nextDate);
           }
         }
       } else if (timelineScale.value === 'months') {
-        let currentDate = new Date(minDate);
-        currentDate.setDate(1); // Start of month
+        let currentDate = new Date(cappedMinDate);
+        currentDate.setDate(1);
         while (currentDate.getTime() <= cappedMaxDate) {
           dates.push(new Date(currentDate));
           currentDate.setMonth(currentDate.getMonth() + 1);
         }
       } else {
-        let currentDate = new Date(minDate);
-        currentDate.setMonth(0, 1); // Start of year
+        let currentDate = new Date(cappedMinDate);
+        currentDate.setMonth(0, 1);
         while (currentDate.getTime() <= cappedMaxDate) {
           dates.push(new Date(currentDate));
           currentDate.setFullYear(currentDate.getFullYear() + 1);
@@ -231,18 +366,17 @@ export default {
     });
 
     const dateWidth = Vue.computed(() => {
-      if (!timeline.value.length) return 40;
-      const totalDays = (timeline.value[timeline.value.length - 1].getTime() - timeline.value[0].getTime()) / (1000 * 60 * 60 * 24);
+      if (!timeline.value || !timeline.value.length) return 40;
       const idealWidth = availableWidth.value / timeline.value.length;
-      return Math.max(idealWidth, 40); // Ensure minimum width for readability
+      return Math.max(idealWidth, 40);
     });
 
     const ganttWidth = Vue.computed(() => {
-      if (!timeline.value.length) return availableWidth.value;
+      if (!timeline.value || !timeline.value.length) return availableWidth.value;
       return timeline.value.length * dateWidth.value;
     });
 
-    const ganttHeight = Vue.computed(() => props.activities.length * 64);
+    const ganttHeight = Vue.computed(() => sortedActivities.value.length * 64);
 
     function formatDate(date) {
       const d = new Date(date);
@@ -258,6 +392,7 @@ export default {
     }
 
     function isSingleDay(activity) {
+      if (!activity || !activity.data || !activity.data.startDate) return false;
       if (!activity.data.endDate) return true;
       const startDate = new Date(activity.data.startDate);
       const endDate = new Date(activity.data.endDate);
@@ -265,7 +400,7 @@ export default {
     }
 
     function getPosition(date) {
-      if (!timeline.value.length) return 0;
+      if (!timeline.value || !timeline.value.length) return 0;
       const timelineStart = timeline.value[0].getTime();
       const timelineEnd = timeline.value[timeline.value.length - 1].getTime();
       const dateTime = new Date(date).getTime();
@@ -273,102 +408,203 @@ export default {
       return fraction * ganttWidth.value;
     }
 
-    function diamondStyle(activity) {
-      const left = getPosition(activity.data.startDate) - 12;
-      return {
-        left: `${left}px`,
-        top: '20px',
-      };
+    function getDateFromPosition(x) {
+      if (!timeline.value || !timeline.value.length) return new Date();
+      const timelineStart = timeline.value[0].getTime();
+      const timelineEnd = timeline.value[timeline.value.length - 1].getTime();
+      const fraction = x / ganttWidth.value;
+      const dateTime = timelineStart + fraction * (timelineEnd - timelineStart);
+      return new Date(dateTime);
     }
 
-    function barStyle(activity) {
-      const startPos = getPosition(activity.data.startDate);
-      const endPos = activity.data.endDate ? getPosition(activity.data.endDate) : startPos + dateWidth.value / 2;
-      const width = Math.max(endPos - startPos, dateWidth.value / 2);
-
-      return {
-        left: `${startPos}px`,
-        width: `${width}px`,
-        top: '20px',
-      };
+    function getMouseX(event) {
+      const svg = svgContainer.value;
+      const ctm = svg.getScreenCTM();
+      const pt = svg.createSVGPoint();
+      pt.x = event.clientX;
+      pt.y = event.clientY;
+      const svgPt = pt.matrixTransform(ctm.inverse());
+      return svgPt.x;
     }
 
-    function barClasses(activity) {
-      const hasConflict = dependencies.value.some(dep => dep.conflict && (dep.fromId === activity.id || dep.toId === activity.id));
-      return {
-        'bg-blue-500 dark:bg-blue-400': !hasConflict && !selectedActivityIds.value.includes(activity.id) && activity.data.status !== 'completed',
-        'bg-yellow-500 dark:bg-yellow-400': selectedActivityIds.value.includes(activity.id),
-        'bg-green-500 dark:bg-green-400': activity.data.status === 'completed',
-        'bg-red-500 dark:bg-red-600': hasConflict,
-      };
+    function startDrag(event, activityId, type) {
+      event.stopPropagation();
+      const mouseX = getMouseX(event);
+      const activity = sortedActivities.value.find(a => a.id === activityId);
+      dragging.value = { type, activityId, startX: mouseX, originalStart: new Date(activity.data.startDate), originalEnd: activity.data.endDate ? new Date(activity.data.endDate) : null };
     }
 
-    const dependencies = Vue.computed(() => {
-      const deps = [];
-      props.activities.forEach(activity => {
-        if (activity.data.dependencies && Array.isArray(activity.data.dependencies)) {
-          activity.data.dependencies.forEach(dep => {
-            const toActivity = props.activities.find(a => a.id === dep.dependencyId);
-            if (toActivity) {
-              const conflict = detectConflict(activity, toActivity, dep.dependencyType);
-              deps.push({
-                id: `${activity.id}-${dep.dependencyId}`,
-                fromId: activity.id,
-                toId: dep.dependencyId,
-                type: dep.dependencyType,
-                conflict,
-              });
-            }
-          });
+    function onMouseMove(event) {
+      if (dragging.value) {
+        const mouseX = getMouseX(event);
+        const newDate = getDateFromPosition(mouseX);
+        const activity = props.activities.find(a => a.id === dragging.value.activityId);
+        const deltaMs = newDate.getTime() - dragging.value.originalStart.getTime();
+        let updateData = { ...activity.data };
+
+        if (dragging.value.type === 'start') {
+          updateData.startDate = newDate.toISOString();
+          if (updateData.endDate && new Date(updateData.endDate) < newDate) {
+            updateData.endDate = newDate.toISOString();
+          }
+        } else if (dragging.value.type === 'end') {
+          updateData.endDate = newDate.toISOString();
+          if (new Date(updateData.startDate) > newDate) {
+            updateData.startDate = newDate.toISOString();
+          }
+        } else if (dragging.value.type === 'bar') {
+          const duration = dragging.value.originalEnd ? dragging.value.originalEnd.getTime() - dragging.value.originalStart.getTime() : 0;
+          updateData.startDate = new Date(dragging.value.originalStart.getTime() + deltaMs).toISOString();
+          if (dragging.value.originalEnd) {
+            updateData.endDate = new Date(dragging.value.originalStart.getTime() + deltaMs + duration).toISOString();
+          }
         }
-      });
-      return deps;
-    });
 
-    function detectConflict(fromActivity, toActivity, type) {
+        updateEntity('activities', activity.id, updateData);
+      }
+    }
+
+    function onMouseUp() {
+      dragging.value = null;
+    }
+
+    function startPan(event) {
+      if (event.target === svgContainer.value) {
+        const startX = event.clientX;
+        const startScrollLeft = ganttContainer.value.scrollLeft;
+        const onPanMove = (moveEvent) => {
+          const deltaX = moveEvent.clientX - startX;
+          ganttContainer.value.scrollLeft = startScrollLeft - deltaX;
+        };
+        const onPanUp = () => {
+          document.removeEventListener('mousemove', onPanMove);
+          document.removeEventListener('mouseup', onPanUp);
+        };
+        document.addEventListener('mousemove', onPanMove);
+        document.addEventListener('mouseup', onPanUp);
+      }
+    }
+
+    function getBarFill(activity) {
+      if (!activity || !activity.id) return '#000000';
+      const hasConflict = sortedDependencies.value.some(dep => 
+        dep.data.conflict && (dep.data.sourceId === activity.id || dep.data.targetId === activity.id)
+      );
+      if (hasConflict) return '#ef4444';
+      if (selectedActivityIds.value.includes(activity.id)) return '#facc15';
+      if (activity.data.status === 'completed') return '#22c55e';
+      return '#3b82f6';
+    }
+
+    function computeDependencyPaths() {
+      if (!ganttBody.value || !svgContainer.value || !ganttContainer.value) return;
+
+      const computedPaths = sortedDependencies.value.map(dep => {
+        const fromActivity = sortedActivities.value.find(a => a.id === dep.data.sourceId);
+        const toActivity = sortedActivities.value.find(a => a.id === dep.data.targetId);
+        if (!fromActivity || !toActivity) return { ...dep, path: '' };
+
+        const fromIndex = sortedActivities.value.findIndex(a => a.id === dep.data.sourceId);
+        const toIndex = sortedActivities.value.findIndex(a => a.id === dep.data.targetId);
+        const fromRect = { 
+          left: getPosition(fromActivity.data.startDate),
+          right: getPosition(fromActivity.data.endDate || fromActivity.data.startDate),
+          middle: fromIndex * 64 + 68, // Middle of the bar (60 + 16/2)
+        };
+        const toRect = { 
+          left: getPosition(toActivity.data.startDate),
+          right: getPosition(toActivity.data.endDate || toActivity.data.startDate),
+          middle: toIndex * 64 + 68, // Middle of the bar (60 + 16/2)
+        };
+
+        const offsetX = 20;
+        let path;
+        let x1, x2, y1, y2;
+
+        switch (dep.data.dependencyType) {
+          case 'FS':
+            x1 = fromRect.right;
+            y1 = fromRect.middle;
+            x2 = toRect.left;
+            y2 = toRect.middle;
+            if (x2 < x1) {
+              const midY1 = y1 + 32; // Bend down to align with target middle
+              const midX = x2 - offsetX;
+              const midY2 = y2;
+              path = `M${x1},${y1} V${midY1} H${midX} V${midY2} H${x2} V${y2}`;
+            } else {
+              path = `M${x1},${y1} V${y1 + 32} H${x2} V${y2}`;
+            }
+            break;
+          case 'SS':
+            x1 = fromRect.left;
+            y1 = fromRect.middle;
+            x2 = toRect.left;
+            y2 = toRect.middle;
+            if (x2 < x1) {
+              const midY1 = y1 + 32;
+              const midX = x2 - offsetX;
+              const midY2 = y2;
+              path = `M${x1},${y1} V${midY1} H${midX} V${midY2} H${x2} V${y2}`;
+            } else {
+              path = `M${x1},${y1} V${y1 + 32} H${x2} V${y2}`;
+            }
+            break;
+          case 'FF':
+            x1 = fromRect.right;
+            y1 = fromRect.middle;
+            x2 = toRect.right;
+            y2 = toRect.middle;
+            if (x2 < x1) {
+              const midY1 = y1 + 32;
+              const midX = x2 + offsetX;
+              const midY2 = y2;
+              path = `M${x1},${y1} V${midY1} H${midX} V${midY2} H${x2} V${y2}`;
+            } else {
+              path = `M${x1},${y1} V${y1 + 32} H${x2} V${y2}`;
+            }
+            break;
+          case 'SF':
+            x1 = fromRect.left;
+            y1 = fromRect.middle;
+            x2 = toRect.right;
+            y2 = toRect.middle;
+            if (x2 < x1) {
+              const midY1 = y1 + 32;
+              const midX = x2 + offsetX;
+              const midY2 = y2;
+              path = `M${x1},${y1} V${midY1} H${midX} V${midY2} H${x2} V${y2}`;
+            } else {
+              path = `M${x1},${y1} V${y1 + 32} H${x2} V${y2}`;
+            }
+            break;
+          default:
+            path = '';
+        }
+
+        return { ...dep, path };
+      });
+
+      dependencyPaths.value = computedPaths;
+    }
+
+    function detectConflict(dep) {
+      const fromActivity = props.activities.find(a => a.id === dep.data.sourceId);
+      const toActivity = props.activities.find(a => a.id === dep.data.targetId);
+      if (!fromActivity || !toActivity) return false;
+
       const fromStart = new Date(fromActivity.data.startDate).getTime();
       const fromEnd = fromActivity.data.endDate ? new Date(fromActivity.data.endDate).getTime() : fromStart;
       const toStart = new Date(toActivity.data.startDate).getTime();
       const toEnd = toActivity.data.endDate ? new Date(toActivity.data.endDate).getTime() : toStart;
 
-      switch (type) {
+      switch (dep.data.dependencyType) {
         case 'FS': return fromEnd > toStart;
         case 'FF': return fromEnd > toEnd;
         case 'SS': return fromStart > toStart;
         case 'SF': return fromStart > toEnd;
         default: return false;
       }
-    }
-
-    function computeDependencyPaths() {
-      if (!ganttBody.value || !svgContainer.value) return;
-
-      const rowHeight = 64;
-      const computedPaths = dependencies.value.map(dep => {
-        const fromActivity = sortedActivities.value.find(a => a.id === dep.fromId);
-        const toActivity = sortedActivities.value.find(a => a.id === dep.toId);
-        if (!fromActivity || !toActivity) {
-          return { ...dep, path: '' };
-        }
-
-        const fromIndex = sortedActivities.value.indexOf(fromActivity);
-        const toIndex = sortedActivities.value.indexOf(toActivity);
-
-        const fromEndDate = fromActivity.data.endDate ? new Date(fromActivity.data.endDate) : new Date(fromActivity.data.startDate);
-        const toStartDate = new Date(toActivity.data.startDate);
-
-        const x1 = getPosition(fromEndDate) + (isSingleDay(fromActivity) ? 12 : 0);
-        const x2 = getPosition(toStartDate) - (isSingleDay(toActivity) ? 12 : 0);
-        const y1 = fromIndex * rowHeight + 32 - scrollTop.value;
-        const y2 = toIndex * rowHeight + 32 - scrollTop.value;
-
-        const offset = 20;
-        const path = `M${x1},${y1} H${x1 + offset} V${y2} H${x2 - offset} H${x2}`;
-
-        return { ...dep, path };
-      });
-
-      staticDependencies.value = computedPaths;
     }
 
     function updateScrollPosition() {
@@ -380,7 +616,7 @@ export default {
     }
 
     Vue.watch(
-      [() => sortedActivities.value, () => ganttWidth.value, () => dependencies.value],
+      [() => sortedActivities.value, () => sortedDependencies.value, () => ganttWidth.value],
       () => {
         Vue.nextTick(() => computeDependencyPaths());
       },
@@ -404,53 +640,116 @@ export default {
       }
     }
 
-    function editActivityName(id, name) {
-      editingActivityId.value = id;
-      editingActivityName.value = name;
-      Vue.nextTick(() => {
-        const input = document.querySelector(`input[editing-activity-id="${id}"]`);
-        if (input) input.focus();
-      });
+    function openActivityModal(activity) {
+      modalActivity.value = {
+        id: activity.id,
+        name: activity.data.name,
+        owner: activity.data.owner || '',
+        description: activity.data.description || '',
+        startDate: new Date(activity.data.startDate).toISOString().split('T')[0],
+        endDate: activity.data.endDate ? new Date(activity.data.endDate).toISOString().split('T')[0] : '',
+      };
+      showActivityModal.value = true;
     }
 
-    function saveActivityName(id) {
-      const activity = sortedActivities.value.find(a => a.id === id);
+    function closeActivityModal() {
+      showActivityModal.value = false;
+      modalActivity.value = {};
+    }
+
+    function saveActivityModal() {
+      const activity = props.activities.find(a => a.id === modalActivity.value.id);
       if (activity) {
-        updateEntity('activities', id, {
+        updateEntity('activities', activity.id, {
           ...activity.data,
-          name: editingActivityName.value,
+          name: modalActivity.value.name,
+          owner: modalActivity.value.owner,
+          description: modalActivity.value.description,
+          startDate: new Date(modalActivity.value.startDate).toISOString(),
+          endDate: modalActivity.value.endDate ? new Date(modalActivity.value.endDate).toISOString() : null,
         });
       }
-      editingActivityId.value = null;
-      editingActivityName.value = '';
+      closeActivityModal();
+    }
+
+    function editDependency(dep) {
+      modalDependency.value = {
+        id: dep.id,
+        sourceId: dep.data.sourceId,
+        targetId: dep.data.targetId,
+        dependencyType: dep.data.dependencyType,
+      };
+    }
+
+    function deleteDependency(id) {
+      removeEntity('dependencies', id);
+    }
+
+    function closeDependencyModal() {
+      showDependencyModal.value = false;
+      modalDependency.value = {};
+    }
+
+    function saveDependencyModal() {
+      if (!modalDependency.value.sourceId || !modalDependency.value.targetId || !modalDependency.value.dependencyType) return;
+
+      const depData = {
+        sourceId: modalDependency.value.sourceId,
+        targetId: modalDependency.value.targetId,
+        dependencyType: modalDependency.value.dependencyType,
+        conflict: detectConflict({ data: modalDependency.value }),
+      };
+
+      if (modalDependency.value.id) {
+        updateEntity('dependencies', modalDependency.value.id, depData);
+      } else {
+        addEntity('dependencies', depData);
+      }
+      closeDependencyModal();
+    }
+
+    function getActivityName(id) {
+      const activity = sortedActivities.value.find(a => a.id === id);
+      return activity ? activity.data.name : 'Unknown';
     }
 
     return {
       selectedActivityIds,
-      editingActivityId,
-      editingActivityName,
       timeline,
       dateWidth,
       ganttWidth,
       ganttHeight,
       sortedActivities,
-      dependencies,
-      staticDependencies,
+      sortedDependencies,
+      dependencyPaths,
       ganttContainer,
       ganttBody,
       svgContainer,
       scrollLeft,
       scrollTop,
+      showActivityModal,
+      showDependencyModal,
+      modalActivity,
+      modalDependency,
       updateScrollPosition,
       formatDate,
       isSingleDay,
-      diamondStyle,
-      barStyle,
-      barClasses,
+      getBarFill,
+      getPosition,
+      getDateFromPosition,
+      getMouseX,
+      startDrag,
+      startPan,
       toggleSelection,
       handleShiftSelect,
-      editActivityName,
-      saveActivityName,
+      openActivityModal,
+      closeActivityModal,
+      saveActivityModal,
+      editDependency,
+      deleteDependency,
+      closeDependencyModal,
+      saveDependencyModal,
+      getActivityName,
     };
   },
 };
