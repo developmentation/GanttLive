@@ -10,7 +10,6 @@ export default {
     },
     activities: {
       type: Array,
-      required: true,
     },
     dependencies: {
       type: Array,
@@ -140,42 +139,47 @@ export default {
 
         <!-- Scrollable Gantt Chart -->
         <div ref="ganttContainer" class="flex-1 overflow-x-auto overflow-y-auto relative" @scroll="updateScrollPosition">
-          <!-- Gantt Chart Header (Timeline) -->
-          <div class="flex border-b border-gray-200 dark:border-gray-700 sticky top-0 z-30 bg-gray-50 dark:bg-gray-900" :style="{ minWidth: ganttWidth + 'px' }">
-            <div class="flex-1">
-              <div class="flex text-sm text-gray-600 dark:text-gray-300 font-medium">
-                <div v-for="date in timeline" :key="date" class="flex-1 text-center py-2 whitespace-nowrap" :style="{ minWidth: dateWidth + 'px' }">
-                  {{ formatDate(date) }}
-                </div>
-              </div>
-            </div>
-          </div>
-
           <!-- Gantt Chart Body -->
-          <div ref="ganttBody" :style="{ minWidth: ganttWidth + 'px', height: ganttHeight + 'px' }">
+          <div ref="ganttBody" :style="{ minWidth: ganttWidth + 'px', minHeight: ganttHeight + 'px' }">
             <svg :width="ganttWidth" :height="ganttHeight" class="absolute top-0 left-0" ref="svgContainer" @mousedown="startPan">
               <defs>
                 <marker id="circleMarker" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
-                  <circle cx="3" cy="3" r="3" fill="currentColor" class="text-gray-500 dark:text-gray-400" />
+                  <circle cx="3" cy="3" r="3" fill="currentColor" :class="darkMode ? 'text-gray-400' : 'text-gray-500'" />
                 </marker>
               </defs>
+              <!-- Timeline Dates -->
+              <g>
+                <rect x="0" y="0" :width="ganttWidth" :height="40" fill="rgb(249, 250, 251)" class="dark:fill-gray-900" />
+                <text
+                  v-for="(date, index) in timeline"
+                  :key="date"
+                  :x="getDateLabelPosition(date, index)"
+                  y="30"
+                  class="text-sm font-medium"
+                  :class="darkMode ? 'fill-gray-300' : 'fill-gray-600'"
+                  text-anchor="middle"
+                >
+                  {{ formatDate(date) }}
+                </text>
+                <line x1="0" :x2="ganttWidth" y1="40" y2="40" class="stroke-gray-200 dark:stroke-gray-700" stroke-width="1" />
+              </g>
               <!-- Background Grid -->
-              <g class="grid">
-                <line v-for="date in timeline" :key="date" :x1="getPosition(date)" :x2="getPosition(date)" :y1="0" :y2="ganttHeight" class="stroke-gray-200 dark:stroke-gray-700" stroke-width="1" />
-                <line v-for="n in sortedActivities?.length" :key="'h'+n" :x1="0" :x2="ganttWidth" :y1="n*64 + 40" :y2="n*64 + 40" class="stroke-gray-200 dark:stroke-gray-700" stroke-width="1" />
+              <g transform="translate(0, 40)">
+                <line v-for="date in timeline" :key="date" :x1="getPosition(date)" :x2="getPosition(date)" :y1="0" :y2="ganttHeight - 40" class="stroke-gray-200 dark:stroke-gray-700" stroke-width="1" />
+                <line v-for="n in (sortedActivities?.length + 1)" :key="'h'+n" :x1="0" :x2="ganttWidth" :y1="n*64" :y2="n*64" class="stroke-gray-200 dark:stroke-gray-700" stroke-width="1" />
               </g>
               <!-- Gantt Bars -->
-              <g>
+              <g transform="translate(0, 40)">
                 <g v-for="(activity, index) in sortedActivities" :key="activity.id">
                   <rect
                     v-if="!isSingleDay(activity)"
                     :id="'gantt-element-' + activity.id"
                     :x="getPosition(activity.data.startDate)"
-                    :y="index * 64 + 60"
+                    :y="index * 64 + 20"
                     :width="getPosition(activity.data.endDate || activity.data.startDate) - getPosition(activity.data.startDate)"
                     :height="16"
                     :fill="getBarFill(activity)"
-                    @mousedown="startDrag($event, activity.id, 'bar')"
+                    @mousedown="start_drag($event, activity.id, 'bar')"
                     @click="toggleSelection(activity.id)"
                     :title="activity.data.name"
                     rx="2"
@@ -184,33 +188,33 @@ export default {
                   <rect
                     v-if="!isSingleDay(activity)"
                     :x="getPosition(activity.data.startDate) - 4"
-                    :y="index * 64 + 60"
+                    :y="index * 64 + 20"
                     width="8"
                     height="16"
                     fill="transparent"
-                    @mousedown="startDrag($event, activity.id, 'start')"
+                    @mousedown="start_drag($event, activity.id, 'start')"
                     class="cursor-w-resize"
                   />
                   <rect
                     v-if="!isSingleDay(activity)"
                     :x="getPosition(activity.data.endDate || activity.data.startDate) - 4"
-                    :y="index * 64 + 60"
+                    :y="index * 64 + 20"
                     width="8"
                     height="16"
                     fill="transparent"
-                    @mousedown="startDrag($event, activity.id, 'end')"
+                    @mousedown="start_drag($event, activity.id, 'end')"
                     class="cursor-e-resize"
                   />
                   <rect
                     v-if="isSingleDay(activity)"
                     :id="'gantt-element-' + activity.id"
                     :x="getPosition(activity.data.startDate) - 12"
-                    :y="index * 64 + 60"
+                    :y="index * 64 + 16"
                     width="24"
                     height="24"
                     transform="rotate(45)"
                     :fill="getBarFill(activity)"
-                    @mousedown="startDrag($event, activity.id, 'bar')"
+                    @mousedown="start_drag($event, activity.id, 'bar')"
                     @click="toggleSelection(activity.id)"
                     :title="activity.data.name"
                     class="cursor-move"
@@ -218,16 +222,16 @@ export default {
                 </g>
               </g>
               <!-- Dependency Paths -->
-              <g>
+              <g transform="translate(0, 40)">
                 <path
                   v-for="dep in dependencyPaths"
                   :key="dep.id"
                   :d="dep.path"
-                  stroke="currentColor"
+                  :stroke="getDependencyColor(dep.data.dependencyType)"
                   stroke-width="2"
+                  opacity="0.3"
                   fill="none"
                   marker-end="url(#circleMarker)"
-                  :class="{ 'text-red-500 dark:text-red-600': dep.conflict, 'text-gray-500 dark:text-gray-400': !dep.conflict }"
                 />
               </g>
             </svg>
@@ -316,10 +320,12 @@ export default {
         .map(a => new Date(a.data.endDate).getTime());
       const minDate = startDates.length ? Math.min(...startDates) : Date.now();
       const maxDate = endDates.length ? Math.max(...endDates) : Date.now();
-      const bufferDays = 30; // Increased buffer to ensure timeline extends beyond last end date
-      const buffer = bufferDays * 24 * 60 * 60 * 1000;
-      const cappedMinDate = minDate - buffer;
-      const cappedMaxDate = maxDate + buffer;
+      
+      // Extend the timeline by at least 1 month (31 days) past the last end date
+      const oneMonthInMs = 31 * 24 * 60 * 60 * 1000; // 31 days in milliseconds
+      const bufferBefore = 30 * 24 * 60 * 60 * 1000; // 30 days buffer before
+      const cappedMinDate = minDate - bufferBefore;
+      const cappedMaxDate = Math.max(maxDate + oneMonthInMs, maxDate + bufferBefore);
       const diffTime = cappedMaxDate - cappedMinDate;
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -327,10 +333,10 @@ export default {
       let interval;
       if (pixelsPerDay > 20) {
         timelineScale.value = 'days';
-        interval = 1000 * 60 * 60 * 24;
+        interval = 1000 * 60 * 60 * 24; // 1 day
       } else if (pixelsPerDay > 5) {
         timelineScale.value = 'weeks';
-        interval = 1000 * 60 * 60 * 24 * 7;
+        interval = 1000 * 60 * 60 * 24 * 7; // 1 week
       } else if (pixelsPerDay > 1) {
         timelineScale.value = 'months';
         interval = null;
@@ -376,19 +382,36 @@ export default {
       return timeline.value.length * dateWidth.value;
     });
 
-    const ganttHeight = Vue.computed(() => sortedActivities.value.length * 64);
+    const ganttHeight = Vue.computed(() => (sortedActivities.value.length + 1) * 64 + 40);
 
     function formatDate(date) {
       const d = new Date(date);
-      if (timelineScale.value === 'days') {
-        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      } else if (timelineScale.value === 'weeks') {
-        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      } else if (timelineScale.value === 'months') {
-        return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-      } else {
-        return d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = String(d.getFullYear()).slice(-2);
+      return `${month}/${year}`;
+    }
+
+    function getDateLabelPosition(date, index) {
+      const basePosition = getPosition(date);
+      if (index === timeline.value.length - 1) {
+        // For the last date, don't shift (or shift minimally to avoid overflow)
+        return basePosition;
       }
+      const nextDate = timeline.value[index + 1];
+      const nextPosition = getPosition(nextDate);
+      const monthWidth = nextPosition - basePosition;
+      const offset = monthWidth * 0.5; // Shift by 50% of the month width
+      return basePosition + offset;
+    }
+
+    function getDependencyColor(dependencyType) {
+      const colorMap = {
+        'FS': '#FF5555', // Red for Finish-to-Start
+        'FF': '#55AAFF', // Blue for Finish-to-Finish
+        'SS': '#55FF55', // Green for Start-to-Start
+        'SF': '#AA55FF', // Purple for Start-to-Finish
+      };
+      return colorMap[dependencyType] || '#000000'; // Default to black if type is unknown
     }
 
     function isSingleDay(activity) {
@@ -427,7 +450,7 @@ export default {
       return svgPt.x;
     }
 
-    function startDrag(event, activityId, type) {
+    function start_drag(event, activityId, type) {
       event.stopPropagation();
       const mouseX = getMouseX(event);
       const activity = sortedActivities.value.find(a => a.id === activityId);
@@ -509,12 +532,12 @@ export default {
         const fromRect = { 
           left: getPosition(fromActivity.data.startDate),
           right: getPosition(fromActivity.data.endDate || fromActivity.data.startDate),
-          middle: fromIndex * 64 + 68, // Middle of the bar (60 + 16/2)
+          middle: fromIndex * 64 + 28, // Adjusted middle of the bar (20 + 16/2)
         };
         const toRect = { 
           left: getPosition(toActivity.data.startDate),
           right: getPosition(toActivity.data.endDate || toActivity.data.startDate),
-          middle: toIndex * 64 + 68, // Middle of the bar (60 + 16/2)
+          middle: toIndex * 64 + 28, // Adjusted middle of the bar (20 + 16/2)
         };
 
         const offsetX = 20;
@@ -528,7 +551,7 @@ export default {
             x2 = toRect.left;
             y2 = toRect.middle;
             if (x2 < x1) {
-              const midY1 = y1 + 32; // Bend down to align with target middle
+              const midY1 = y1 + 32;
               const midX = x2 - offsetX;
               const midY2 = y2;
               path = `M${x1},${y1} V${midY1} H${midX} V${midY2} H${x2} V${y2}`;
@@ -733,12 +756,14 @@ export default {
       modalDependency,
       updateScrollPosition,
       formatDate,
+      getDateLabelPosition,
+      getDependencyColor,
       isSingleDay,
       getBarFill,
       getPosition,
       getDateFromPosition,
       getMouseX,
-      startDrag,
+      start_drag,
       startPan,
       toggleSelection,
       handleShiftSelect,
@@ -750,6 +775,8 @@ export default {
       closeDependencyModal,
       saveDependencyModal,
       getActivityName,
+      onMouseMove,
+      onMouseUp,
     };
   },
 };
