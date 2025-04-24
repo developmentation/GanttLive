@@ -142,7 +142,7 @@ export function useHistory() {
       if (index !== -1) {
         const currentText = entities.value[entityType][index].data.text || '';
         const newContent = data.content || '';
-        console.log(`Updating draft for ${entityType} ID ${id}: currentText="${currentText}", newContent="${newContent}"`);
+        // console.log(`Updating draft for ${entityType} ID ${id}: currentText="${currentText}", newContent="${newContent}"`);
         entities.value[entityType][index].data.text = currentText + newContent;
         entities.value = { ...entities.value };
       } else {

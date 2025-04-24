@@ -409,7 +409,7 @@ export default {
         triggerLLM('projects', activeProjectId.value, {
           provider: model.provider,
           name: model.name.en,
-          model: model.model,
+          model: 'grok-3',
         }, 0.7, '', 'Generate project summary', messageHistory, true);
       } catch (error) {
         console.error('Error triggering LLM for summary:', error);
@@ -535,8 +535,9 @@ export default {
         });
       }
 
-      const jsonInstruction = selectedActivities.length
-        ? `Based on the user's input, modify the selected activities or dependencies. Return a JSON object with:
+      const jsonInstruction = projectActivities.value.length
+        ? `Based on the user's input, modify the selected activities or dependencies. Return a JSON object with ONLY the following attributes:
+        project:  Optional project details ({name, description, outcomes, budget}) 
 - activitiesToAdd: Array of new activities ({name, startDate, endDate, owner, description})
 - activitiesToUpdate: Array of updates for existing activities ({id, name, startDate, endDate, owner, description, status})
 - activitiesToDelete: Array of activity IDs to delete
@@ -544,11 +545,13 @@ export default {
 - dependenciesToUpdate: Array of updates for existing dependencies ({id, sourceId, targetId, dependencyType})
 - dependenciesToDelete: Array of dependency IDs to delete
 Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. Only modify the selected activities: ${JSON.stringify(selectedActivities.map(a => a.data))}. Return ONLY JSON, no additional text.`
-        : `Based on the user's input, generate or modify a project plan. Return a JSON object with:
-- project: Optional project details ({name, description, outcomes, budget})
+        : `Based on the user's input, generate or modify a project plan. Return a JSON object with only the applicable attributes:
+- project: Project details ({name, description, outcomes, budget})
 - activities: Array of activities ({name, startDate, endDate, owner, description})
 - dependencies: Array of dependencies ({sourceId, targetId, dependencyType})
 Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. Use activity names as temporary IDs for dependencies; they will be mapped to actual IDs. Return ONLY JSON, no additional text.`;
+
+      console.log("jsonInstructions for LLM", jsonInstruction)
 
       messageHistory.push({
         role: 'user',
@@ -604,164 +607,168 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. U
       };
       llmResponses.push(newResponse);
 
-      if (responseText.startsWith('```json')) {
-        responseText = responseText.replace(/```json\n|\n```/g, '').trim();
+      // Ensure all updates are processed in a single tick to avoid reactivity issues
+      Vue.nextTick(() => {
         try {
-          const parsed = JSON5.parse(responseText);
+          if (responseText.startsWith('```json')) {
+            responseText = responseText.replace(/```json\n|\n```/g, '').trim();
+            const parsed = JSON5.parse(responseText);
 
-          // Update project data
-          updateEntity('projects', activeProjectId.value, {
-            ...activeProject.value.data,
-            ...(parsed.project || {}),
-            llmResponses,
-            llmLastResponse: null,
-          });
+            // Update project data
+            updateEntity('projects', activeProjectId.value, {
+              ...activeProject.value.data,
+              ...(parsed.project || {}),
+              llmResponses,
+              llmLastResponse: null,
+            });
 
-          const activityIdMapping = {};
-          const tempActivities = [];
+            const activityIdMapping = {};
 
-          if (parsed.activities) {
-            parsed.activities.forEach((act, index) => {
-              const newId = addEntity('activities', {
-                project: activeProjectId.value,
-                ...act,
+            if (parsed.activities) {
+              parsed.activities.forEach((act, index) => {
+                const newId = addEntity('activities', {
+                  project: activeProjectId.value,
+                  ...act,
+                });
+                activityIdMapping[index] = newId;
+                if (act.name) activityIdMapping[act.name] = newId;
               });
-              tempActivities.push({ id: newId, name: act.name, originalIndex: index });
-              activityIdMapping[index] = newId;
-              if (act.name) activityIdMapping[act.name] = newId;
-            });
-          }
+            }
 
-          if (parsed.activitiesToAdd) {
-            parsed.activitiesToAdd.forEach((act, index) => {
-              const newId = addEntity('activities', {
-                project: activeProjectId.value,
-                ...act,
+            if (parsed.activitiesToAdd) {
+              parsed.activitiesToAdd.forEach((act, index) => {
+                const newId = addEntity('activities', {
+                  project: activeProjectId.value,
+                  ...act,
+                });
+                activityIdMapping[index + (parsed.activities ? parsed.activities.length : 0)] = newId;
+                if (act.name) activityIdMapping[act.name] = newId;
               });
-              tempActivities.push({ id: newId, name: act.name, originalIndex: index + (parsed.activities ? parsed.activities.length : 0) });
-              activityIdMapping[index + (parsed.activities ? parsed.activities.length : 0)] = newId;
-              if (act.name) activityIdMapping[act.name] = newId;
-            });
-          }
+            }
 
-          if (parsed.activitiesToUpdate) {
-            parsed.activitiesToUpdate.forEach(update => {
-              const act = entities.value?.activities?.find(a => a.id === update.id);
-              if (act) {
-                updateEntity('activities', update.id, {
-                  ...act.data,
-                  ...update,
-                });
-              }
-            });
-          }
-
-          if (parsed.activitiesToDelete) {
-            parsed.activitiesToDelete.forEach(id => {
-              if (entities.value?.activities?.some(a => a.id === id)) {
-                removeEntity('activities', id);
-              }
-            });
-          }
-
-          if (parsed.dependencies) {
-            parsed.dependencies.forEach(dep => {
-              let sourceId = dep.sourceId;
-              let targetId = dep.targetId;
-              if (!isNaN(dep.sourceId)) sourceId = activityIdMapping[parseInt(dep.sourceId)];
-              else if (typeof dep.sourceId === 'string') sourceId = activityIdMapping[dep.sourceId];
-              if (!isNaN(dep.targetId)) targetId = activityIdMapping[parseInt(dep.targetId)];
-              else if (typeof dep.targetId === 'string') targetId = activityIdMapping[dep.targetId];
-
-              if (sourceId && targetId && sourceId !== targetId) {
-                addEntity('dependencies', {
-                  sourceId,
-                  targetId,
-                  dependencyType: dep.dependencyType,
-                });
-              }
-            });
-          }
-
-          if (parsed.dependenciesToAdd) {
-            parsed.dependenciesToAdd.forEach(dep => {
-              let sourceId = dep.sourceId;
-              let targetId = dep.targetId;
-              if (!isNaN(dep.sourceId)) sourceId = activityIdMapping[parseInt(dep.sourceId)];
-              else if (typeof dep.sourceId === 'string') sourceId = activityIdMapping[dep.sourceId];
-              if (!isNaN(dep.targetId)) targetId = activityIdMapping[parseInt(dep.targetId)];
-              else if (typeof dep.targetId === 'string') targetId = activityIdMapping[dep.targetId];
-
-              if (sourceId && targetId && sourceId !== targetId) {
-                addEntity('dependencies', {
-                  sourceId,
-                  targetId,
-                  dependencyType: dep.dependencyType,
-                });
-              }
-            });
-          }
-
-          if (parsed.dependenciesToUpdate) {
-            parsed.dependenciesToUpdate.forEach(update => {
-              const dep = entities.value?.dependencies?.find(d => d.id === update.id);
-              if (dep) {
-                let sourceId = update.sourceId;
-                let targetId = update.targetId;
-                if (!isNaN(update.sourceId)) sourceId = activityIdMapping[parseInt(update.sourceId)];
-                else if (typeof update.sourceId === 'string') sourceId = activityIdMapping[update.sourceId];
-                if (!isNaN(update.targetId)) targetId = activityIdMapping[parseInt(update.targetId)];
-                else if (typeof update.targetId === 'string') targetId = activityIdMapping[update.targetId];
-
-                if (sourceId && targetId && sourceId !== targetId) {
-                  updateEntity('dependencies', update.id, {
-                    ...dep.data,
-                    sourceId,
-                    targetId,
-                    dependencyType: update.dependencyType,
+            if (parsed.activitiesToUpdate) {
+              parsed.activitiesToUpdate.forEach(update => {
+                const act = entities.value?.activities?.find(a => a.id === update.id);
+                if (act) {
+                  updateEntity('activities', update.id, {
+                    ...act.data,
+                    ...update,
                   });
                 }
-              }
+              });
+            }
+
+            if (parsed.activitiesToDelete) {
+              parsed.activitiesToDelete.forEach(id => {
+                if (entities.value?.activities?.some(a => a.id === id)) {
+                  removeEntity('activities', id);
+                }
+              });
+            }
+
+            if (parsed.dependencies) {
+              parsed.dependencies.forEach(dep => {
+                let sourceId = dep.sourceId;
+                let targetId = dep.targetId;
+                if (!isNaN(dep.sourceId)) sourceId = activityIdMapping[parseInt(dep.sourceId)];
+                else if (typeof dep.sourceId === 'string') sourceId = activityIdMapping[dep.sourceId];
+                if (!isNaN(dep.targetId)) targetId = activityIdMapping[parseInt(dep.targetId)];
+                else if (typeof dep.targetId === 'string') targetId = activityIdMapping[dep.targetId];
+
+                if (sourceId && targetId && sourceId !== targetId) {
+                  addEntity('dependencies', {
+                    sourceId,
+                    targetId,
+                    dependencyType: dep.dependencyType,
+                  });
+                }
+              });
+            }
+
+            if (parsed.dependenciesToAdd) {
+              parsed.dependenciesToAdd.forEach(dep => {
+                let sourceId = dep.sourceId;
+                let targetId = dep.targetId;
+                if (!isNaN(dep.sourceId)) sourceId = activityIdMapping[parseInt(dep.sourceId)];
+                else if (typeof dep.sourceId === 'string') sourceId = activityIdMapping[dep.sourceId];
+                if (!isNaN(dep.targetId)) targetId = activityIdMapping[parseInt(dep.targetId)];
+                else if (typeof dep.targetId === 'string') targetId = activityIdMapping[dep.targetId];
+
+                if (sourceId && targetId && sourceId !== targetId) {
+                  addEntity('dependencies', {
+                    sourceId,
+                    targetId,
+                    dependencyType: dep.dependencyType,
+                  });
+                }
+              });
+            }
+
+            if (parsed.dependenciesToUpdate) {
+              parsed.dependenciesToUpdate.forEach(update => {
+                const dep = entities.value?.dependencies?.find(d => d.id === update.id);
+                if (dep) {
+                  let sourceId = update.sourceId;
+                  let targetId = update.targetId;
+                  if (!isNaN(update.sourceId)) sourceId = activityIdMapping[parseInt(update.sourceId)];
+                  else if (typeof update.sourceId === 'string') sourceId = activityIdMapping[update.sourceId];
+                  if (!isNaN(update.targetId)) sourceId = activityIdMapping[parseInt(update.targetId)];
+                  else if (typeof update.targetId === 'string') targetId = activityIdMapping[update.targetId];
+
+                  if (sourceId && targetId && sourceId !== targetId) {
+                    updateEntity('dependencies', update.id, {
+                      ...dep.data,
+                      sourceId,
+                      targetId,
+                      dependencyType: update.dependencyType,
+                    });
+                  }
+                }
+              });
+            }
+
+            if (parsed.dependenciesToDelete) {
+              parsed.dependenciesToDelete.forEach(id => {
+                if (entities.value?.dependencies?.some(d => d.id === id)) {
+                  removeEntity('dependencies', id);
+                }
+              });
+            }
+          } else {
+            updateEntity('projects', activeProjectId.value, {
+              ...activeProject.value.data,
+              summary: newResponse,
+              llmResponses,
+              llmLastResponse: null,
             });
+            projectSummary.value = newResponse.text;
           }
 
-          if (parsed.dependenciesToDelete) {
-            parsed.dependenciesToDelete.forEach(id => {
-              if (entities.value?.dependencies?.some(d => d.id === id)) {
-                removeEntity('dependencies', id);
-              }
-            });
-          }
+          // Force a reactive update to ensure UI reflects changes
+          entities.value = { ...entities.value };
         } catch (error) {
-          console.error('Error parsing LLM response:', error);
-          llmResponses[llmResponses.length - 1] = {
-            ...llmResponses[llmResponses.length - 1],
-            text: 'Error: Invalid JSON response',
-            isStreaming: false,
-          };
+          console.error('Error processing LLM response:', error);
           updateEntity('projects', activeProjectId.value, {
             ...activeProject.value.data,
-            llmResponses,
+            llmResponses: llmResponses.concat([{
+              text: 'Error: Invalid JSON response',
+              isStreaming: false,
+              timestamp: Date.now(),
+            }]),
             llmLastResponse: null,
           });
+          // Force a reactive update on error
+          entities.value = { ...entities.value };
         }
-      } else {
-        updateEntity('projects', activeProjectId.value, {
-          ...activeProject.value.data,
-          summary: newResponse,
-          llmResponses,
-          llmLastResponse: null,
-        });
-        projectSummary.value = newResponse.text;
-      }
 
-      isSending.value = false;
-      isGeneratingSummary.value = false;
-      selectedActivityIds.value = [];
-      if (gantt.value && typeof gantt.value.clearSelections === 'function') {
-        gantt.value.clearSelections();
-      }
-      ganttKey.value += 1;
+        isSending.value = false;
+        isGeneratingSummary.value = false;
+        selectedActivityIds.value = [];
+        if (gantt.value && typeof gantt.value.clearSelections === 'function') {
+          gantt.value.clearSelections();
+        }
+        ganttKey.value += 1;
+      });
     }
 
     const { on } = useRealTime();
