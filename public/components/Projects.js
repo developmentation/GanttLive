@@ -96,8 +96,7 @@ export default {
                 Export Project (JSON)
               </button>
             </div>
-            <p v-if="!isEditingDescription" @click="isEditingDescription = true" class="text-gray-600 dark:text-gray-300 mt-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded">{{ activeProject.data.description || 'No description provided.' }}</p |>
-
+            <p v-if="!isEditingDescription" @click="isEditingDescription = true" class="text-gray-600 dark:text-gray-300 mt-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded">{{ activeProject.data.description || 'No description provided.' }}</p>
             <textarea
               v-else
               v-model="projectDescription"
@@ -643,30 +642,95 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. R
           activeProject.value.data.llmLastResponse = null;
         }
 
-        // Handle activities
+        // Create a mapping of LLM-generated dependency IDs to actual activity UUIDs
+        const activityIdMapping = {};
+        const tempActivities = [];
+
+        // Handle activities (store temporarily before adding)
         if (parsed.activities) {
-          parsed.activities.forEach(act => {
-            console.log('Adding activity:', act);
-            addEntity('activities', {
+          parsed.activities.forEach((act, index) => {
+            const newId = addEntity('activities', {
               project: activeProjectId.value,
               ...act,
+              dependencies: [], // Temporarily clear dependencies
             });
+            tempActivities.push({ id: newId, name: act.name, originalIndex: index, dependencies: act.dependencies || [] });
+            activityIdMapping[index] = newId;
+            if (act.name) {
+              activityIdMapping[act.name] = newId;
+            }
           });
         }
+
         if (parsed.activitiesToAdd) {
-          parsed.activitiesToAdd.forEach(act => {
-            console.log('Adding activity from activitiesToAdd:', act);
-            addEntity('activities', {
+          parsed.activitiesToAdd.forEach((act, index) => {
+            const newId = addEntity('activities', {
               project: activeProjectId.value,
               ...act,
+              dependencies: [], // Temporarily clear dependencies
             });
+            tempActivities.push({ id: newId, name: act.name, originalIndex: index + (parsed.activities ? parsed.activities.length : 0), dependencies: act.dependencies || [] });
+            activityIdMapping[index + (parsed.activities ? parsed.activities.length : 0)] = newId;
+            if (act.name) {
+              activityIdMapping[act.name] = newId;
+            }
           });
         }
+
+        // Now update dependencies for all activities
+        tempActivities.forEach(activity => {
+          if (activity.dependencies && Array.isArray(activity.dependencies)) {
+            const updatedDependencies = activity.dependencies.map(dep => {
+              let newDependencyId = dep.dependencyId;
+              // If dependencyId is a number, treat it as an index
+              if (!isNaN(dep.dependencyId)) {
+                const index = parseInt(dep.dependencyId);
+                newDependencyId = activityIdMapping[index];
+              }
+              // If dependencyId is a string, treat it as a name
+              else if (typeof dep.dependencyId === 'string') {
+                newDependencyId = activityIdMapping[dep.dependencyId];
+              }
+              return {
+                ...dep,
+                dependencyId: newDependencyId || dep.dependencyId, // Fallback to original if not found
+              };
+            }).filter(dep => dep.dependencyId && dep.dependencyId !== activity.id); // Skip self-referencing dependencies
+
+            // Update the activity with the new dependencies
+            updateEntity('activities', activity.id, {
+              ...entities.value.activities.find(a => a.id === activity.id).data,
+              dependencies: updatedDependencies,
+            });
+
+            // Update entities.value.activities to trigger reactivity
+            const index = entities.value.activities.findIndex(a => a.id === activity.id);
+            if (index !== -1) {
+              entities.value.activities[index].data.dependencies = updatedDependencies;
+            }
+          }
+        });
+
         if (parsed.activitiesToUpdate) {
           parsed.activitiesToUpdate.forEach(update => {
             const act = entities.value.activities.find(a => a.id === update.id);
             if (act) {
               console.log('Updating activity:', update);
+              // Map dependencies in activitiesToUpdate
+              if (update.dependencies && Array.isArray(update.dependencies)) {
+                update.dependencies = update.dependencies.map(dep => {
+                  let newDependencyId = dep.dependencyId;
+                  if (!isNaN(dep.dependencyId)) {
+                    newDependencyId = activityIdMapping[parseInt(dep.dependencyId)];
+                  } else if (typeof dep.dependencyId === 'string') {
+                    newDependencyId = activityIdMapping[dep.dependencyId];
+                  }
+                  return {
+                    ...dep,
+                    dependencyId: newDependencyId || dep.dependencyId,
+                  };
+                }).filter(dep => dep.dependencyId && dep.dependencyId !== update.id); // Skip self-referencing
+              }
               updateEntity('activities', update.id, {
                 ...act.data,
                 ...update,
@@ -687,6 +751,7 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. R
             }
           });
         }
+
         if (parsed.activitiesToDelete) {
           parsed.activitiesToDelete.forEach(id => {
             if (entities.value.activities.some(a => a.id === id)) {
@@ -696,31 +761,6 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. R
               entities.value.activities = entities.value.activities.filter(a => a.id !== id);
             }
           });
-        }
-
-        // Add test dependencies between activities (temporary for testing SVG arrows)
-        const activities = entities.value.activities.filter(a => a.data.project === activeProjectId.value);
-        if (activities.length >= 3) { // Ensure we have enough activities
-          console.log('Adding test dependencies between activities');
-          // Add dependency: Activity 0 ("Research Cat Breeds") depends on Activity 1 ("Determine Suitability") with FS
-          updateEntity('activities', activities[0].id, {
-            ...activities[0].data,
-            dependencies: [{ dependencyId: activities[1].id, dependencyType: 'FS' }],
-          });
-          // Add dependency: Activity 2 ("Assess Home Environment") depends on Activity 1 ("Determine Suitability") with FS
-          updateEntity('activities', activities[2].id, {
-            ...activities[2].data,
-            dependencies: [{ dependencyId: activities[1].id, dependencyType: 'FS' }],
-          });
-          // Update entities.value.activities to trigger reactivity
-          const index0 = entities.value.activities.findIndex(a => a.id === activities[0].id);
-          const index2 = entities.value.activities.findIndex(a => a.id === activities[2].id);
-          if (index0 !== -1) {
-            entities.value.activities[index0].data.dependencies = [{ dependencyId: activities[1].id, dependencyType: 'FS' }];
-          }
-          if (index2 !== -1) {
-            entities.value.activities[index2].data.dependencies = [{ dependencyId: activities[1].id, dependencyType: 'FS' }];
-          }
         }
 
       } catch (error) {
