@@ -629,7 +629,7 @@ export default {
       llmResponses.push(newResponse);
 
       // Ensure all updates are processed in a single tick to avoid reactivity issues
-      Vue.nextTick(() => {
+    //   Vue.nextTick(() => {
         try {
           if (responseText.startsWith('```json')) {
             responseText = responseText.replace(/```json\n|\n```/g, '').trim();
@@ -789,7 +789,7 @@ export default {
           gantt.value.clearSelections();
         }
         ganttKey.value += 1;
-      });
+    //   });
     }
 
     const { on } = useRealTime();
