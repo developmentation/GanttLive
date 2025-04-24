@@ -216,22 +216,26 @@ export default {
                     @mousedown="start_drag($event, activity.id, 'end')"
                     class="cursor-e-resize"
                   />
-                  <rect
-                    v-if="isSingleDay(activity)"
-                    :id="'gantt-element-' + activity.id"
-                    :x="getPosition(draggingActivityId === activity.id ? tempActivityDates[activity.id]?.startDate || activity.data.startDate : activity.data.startDate) - 12"
-                    :y="index * 64 + 16"
-                    width="24"
-                    height="24"
-                    transform="rotate(45)"
-                    :fill="getBarFill(activity).fill"
-                    :stroke="getBarFill(activity).stroke"
-                    :stroke-width="getBarFill(activity).strokeWidth"
-                    @mousedown="start_drag($event, activity.id, 'bar')"
-                    @click="toggleSelection(activity.id)"
-                    :title="activity.data.name"
-                    class="cursor-move"
-                  />
+                  <g v-if="isSingleDay(activity)">
+                    <g
+                      :transform="'translate(' + getPosition(draggingActivityId === activity.id ? tempActivityDates[activity.id]?.startDate || activity.data.startDate : activity.data.startDate) + ',' + (index * 64 + 28) + ') rotate(45)'"
+                    >
+                      <rect
+                        :id="'gantt-element-' + activity.id"
+                        x="-12"
+                        y="-12"
+                        width="24"
+                        height="24"
+                        :fill="getBarFill(activity).fill"
+                        :stroke="getBarFill(activity).stroke"
+                        :stroke-width="getBarFill(activity).strokeWidth"
+                        @mousedown="start_drag($event, activity.id, 'bar')"
+                        @click="toggleSelection(activity.id)"
+                        :title="activity.data.name"
+                        class="cursor-move"
+                      />
+                    </g>
+                  </g>
                 </g>
               </g>
               <!-- Dependency Paths -->
@@ -842,7 +846,6 @@ export default {
 
       emit('activity-changed');
       showActivityModal.value = false;
-    //   alert('Dates have been adjusted to resolve conflicts.');
     }
 
     function updateScrollPosition() {
