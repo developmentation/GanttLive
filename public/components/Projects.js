@@ -407,9 +407,9 @@ export default {
 
       try {
         triggerLLM('projects', activeProjectId.value, {
-          provider: model.provider,
-          name: model.name.en,
-          model: 'grok-3',
+            provider: model.provider,
+            name: model.name.en,
+            model: model.model,
         }, 0.7, '', 'Generate project summary', messageHistory, true);
       } catch (error) {
         console.error('Error triggering LLM for summary:', error);
@@ -514,49 +514,66 @@ export default {
       draft.value = '';
 
       const messageHistory = [];
-      const selectedActivities = selectedActivityIds.value.length
-        ? projectActivities.value.filter(a => selectedActivityIds.value.includes(a.id))
-        : [];
+      let jsonInstruction = "";
+        
+      let promptActivities = entities.value.activities.filter(a => a.data.project === activeProjectId.value)
+
+    if(promptActivities.length)
+    {
+        jsonInstruction = 
+        `
+        Your job is to update the following project information based on the user's input: ${messageToSend}.
+        Return a JSON object with ONLY the applicable following attributes:
+        - project:  Optional project details ({name, description, outcomes, budget}) 
+        - activitiesToAdd: Array of new activities ({name, startDate, endDate, owner, description})
+        - activitiesToUpdate: Array of updates for existing activities ({id, name, startDate, endDate, owner, description, status})
+        - activitiesToDelete: Array of activity IDs to delete
+        - dependenciesToAdd: Array of new dependencies ({sourceId, targetId, dependencyType})
+        - dependenciesToUpdate: Array of updates for existing dependencies ({id, sourceId, targetId, dependencyType})
+        - dependenciesToDelete: Array of dependency IDs to delete
+        Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. 
+        Return ONLY JSON, no additional text.`;
+    }
+    else
+    {
+        jsonInstruction = 
+        `
+        Your job is to create a project based on the user's input: ${messageToSend}.
+        Be comprehensive in your analysis of the various activities and dependencies. Ensure the startDate and endDate for each activity is reasonable based on the information you have.
+        Ensure dependencies are logical and follow one of the four types below.
+        Return ONLY a JSON object with only the applicable attributes:
+        - project: Project details ({name, description, outcomes, budget})
+        - activities: Array of activities ({name, startDate, endDate, owner, description})
+        - dependencies: Array of dependencies ({sourceId, targetId, dependencyType})
+        Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. Use activity names as temporary IDs for dependencies; they will be mapped to actual IDs. Return ONLY JSON, no additional text.`;
+    }
 
       messageHistory.push({
         role: 'user',
-        content: `Current project: ${JSON.stringify(activeProject.value.data)}`,
+        content: `${jsonInstruction}`,
+      });
+
+      messageHistory.push({
+        role: 'user',
+        content: `Current project: ${JSON.stringify({id:activeProject.value.id, data:{
+            name: activeProject.value.data.name,
+            description: activeProject.value.data.description,
+            budget: activeProject.value.data.budget,
+            outcomes: activeProject.value.data.outcomes,
+        }})}`,
       });
       if (projectActivities.value.length) {
         messageHistory.push({
           role: 'user',
-          content: `Current activities: ${JSON.stringify(projectActivities.value.map(a => a.data))}`,
+          content: `Current activities: ${JSON.stringify(projectActivities.value.map((a) => {return {id:a.id, data:a.data}}))}`,
         });
       }
       if (projectDependencies.value.length) {
         messageHistory.push({
           role: 'user',
-          content: `Current dependencies: ${JSON.stringify(projectDependencies.value.map(d => d.data))}`,
+          content: `Current dependencies: ${JSON.stringify(projectDependencies.value.map((d) => {return {id:d.id, data:d.data}}))}`,
         });
       }
-
-      const jsonInstruction = projectActivities.value.length
-        ? `Based on the user's input, modify the selected activities or dependencies. Return a JSON object with ONLY the following attributes:
-        project:  Optional project details ({name, description, outcomes, budget}) 
-- activitiesToAdd: Array of new activities ({name, startDate, endDate, owner, description})
-- activitiesToUpdate: Array of updates for existing activities ({id, name, startDate, endDate, owner, description, status})
-- activitiesToDelete: Array of activity IDs to delete
-- dependenciesToAdd: Array of new dependencies ({sourceId, targetId, dependencyType})
-- dependenciesToUpdate: Array of updates for existing dependencies ({id, sourceId, targetId, dependencyType})
-- dependenciesToDelete: Array of dependency IDs to delete
-Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. Only modify the selected activities: ${JSON.stringify(selectedActivities.map(a => a.data))}. Return ONLY JSON, no additional text.`
-        : `Based on the user's input, generate or modify a project plan. Return a JSON object with only the applicable attributes:
-- project: Project details ({name, description, outcomes, budget})
-- activities: Array of activities ({name, startDate, endDate, owner, description})
-- dependencies: Array of dependencies ({sourceId, targetId, dependencyType})
-Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. Use activity names as temporary IDs for dependencies; they will be mapped to actual IDs. Return ONLY JSON, no additional text.`;
-
-      console.log("jsonInstructions for LLM", jsonInstruction)
-
-      messageHistory.push({
-        role: 'user',
-        content: `${messageToSend}\n\n${jsonInstruction}`,
-      });
 
       const model = models.value.find(m => m.model === selectedModel.value) || {
         provider: 'xai',
@@ -564,6 +581,9 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. U
         model: 'grok-3',
       };
       try {
+
+        console.log("LLM SEND", messageHistory)
+
         triggerLLM('projects', activeProjectId.value, {
           provider: model.provider,
           name: model.name.en,
@@ -598,6 +618,7 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. U
       if (eventObj.data.entityType !== 'projects' || !activeProject.value || eventObj.id !== activeProjectId.value) return;
 
       let responseText = llmDraftText.value;
+      console.log("LLM END", responseText)
       llmDraftText.value = ''; // Reset
       const llmResponses = activeProject.value.data.llmResponses || [];
       const newResponse = {
