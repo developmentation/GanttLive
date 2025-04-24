@@ -58,8 +58,8 @@ export default {
       <!-- Modal for Dependency Editing -->
       <div v-if="showDependencyModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white dark:bg-gray-800 p-6 rounded-lg w-1/2 max-h-[80vh] overflow-y-auto">
-          <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Manage Dependencies</h3>
-          <table class="w-full mb-4">
+          <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">{{ isEditingDependency ? 'Edit Dependency' : 'Add Dependency' }}</h3>
+          <table v-if="sortedDependencies.length" class="w-full mb-4">
             <thead>
               <tr>
                 <th class="text-left p-2 text-gray-700 dark:text-gray-300">Source</th>
@@ -116,9 +116,14 @@ export default {
         <div class="w-48 flex-shrink-0 z-20">
           <div class="w-48 h-10 sticky top-0 bg-gray-50 dark:bg-gray-900 flex items-center justify-between px-2">
             <span class="font-semibold text-gray-800 dark:text-gray-200">Activities</span>
-            <button @click="showDependencyModal = true" class="text-blue-500">
-              <i class="pi pi-list-check"></i>
-            </button>
+            <div class="flex items-center gap-2">
+              <button @click="addActivity" class="text-blue-500">
+                <i class="pi pi-plus"></i>
+              </button>
+              <button @click="showDependencyModal = true" class="text-blue-500">
+                <i class="pi pi-list-check"></i>
+              </button>
+            </div>
           </div>
           <div v-for="(activity, index) in sortedActivities" :key="activity.id" class="border-b border-gray-200 dark:border-gray-700 h-16 flex items-center">
             <div class="w-48 p-2 bg-gray-50 dark:bg-gray-900">
@@ -155,7 +160,7 @@ export default {
                   :key="date"
                   :x="getDateLabelPosition(date, index)"
                   y="30"
-                  class="text-sm font-medium"
+                  class="text-sm font-medium select-none"
                   :class="darkMode ? 'fill-gray-300' : 'fill-gray-600'"
                   text-anchor="middle"
                 >
@@ -178,7 +183,9 @@ export default {
                     :y="index * 64 + 20"
                     :width="getPosition(activity.data.endDate || activity.data.startDate) - getPosition(activity.data.startDate)"
                     :height="16"
-                    :fill="getBarFill(activity)"
+                    :fill="getBarFill(activity).fill"
+                    :stroke="getBarFill(activity).stroke"
+                    :stroke-width="getBarFill(activity).strokeWidth"
                     @mousedown="start_drag($event, activity.id, 'bar')"
                     @click="toggleSelection(activity.id)"
                     :title="activity.data.name"
@@ -213,7 +220,9 @@ export default {
                     width="24"
                     height="24"
                     transform="rotate(45)"
-                    :fill="getBarFill(activity)"
+                    :fill="getBarFill(activity).fill"
+                    :stroke="getBarFill(activity).stroke"
+                    :stroke-width="getBarFill(activity).strokeWidth"
                     @mousedown="start_drag($event, activity.id, 'bar')"
                     @click="toggleSelection(activity.id)"
                     :title="activity.data.name"
@@ -257,6 +266,7 @@ export default {
     const showDependencyModal = Vue.ref(false);
     const modalActivity = Vue.ref({});
     const modalDependency = Vue.ref({});
+    const isEditingDependency = Vue.ref(false);
 
     const sortedActivities = Vue.computed(() => 
       [...props.activities]
@@ -509,14 +519,29 @@ export default {
     }
 
     function getBarFill(activity) {
-      if (!activity || !activity.id) return '#000000';
-      const hasConflict = sortedDependencies.value.some(dep => 
-        dep.data.conflict && (dep.data.sourceId === activity.id || dep.data.targetId === activity.id)
+      if (!activity || !activity.id) {
+        return { fill: '#000000', stroke: 'none', strokeWidth: 0 };
+      }
+
+      // Check for dependency violations
+      const hasViolation = sortedDependencies.value.some(dep => 
+        (dep.data.sourceId === activity.id || dep.data.targetId === activity.id) && detectConflict(dep)
       );
-      if (hasConflict) return '#ef4444';
-      if (selectedActivityIds.value.includes(activity.id)) return '#facc15';
-      if (activity.data.status === 'completed') return '#22c55e';
-      return '#3b82f6';
+
+      let fillColor;
+      if (selectedActivityIds.value.includes(activity.id)) {
+        fillColor = '#facc15';
+      } else if (activity.data.status === 'completed') {
+        fillColor = '#22c55e';
+      } else {
+        fillColor = '#3b82f6';
+      }
+
+      return {
+        fill: fillColor,
+        stroke: hasViolation ? '#ef4444' : 'none',
+        strokeWidth: hasViolation ? 5 : 0,
+      };
     }
 
     function computeDependencyPaths() {
@@ -652,6 +677,7 @@ export default {
       } else {
         selectedActivityIds.value.push(id);
       }
+      emit('clear-selections');
     }
 
     function handleShiftSelect(index, event) {
@@ -661,6 +687,20 @@ export default {
         const end = Math.max(lastSelectedIndex, index);
         selectedActivityIds.value = sortedActivities.value.slice(start, end + 1).map(a => a.id);
       }
+    }
+
+    function addActivity() {
+      const today = new Date().toISOString().split('T')[0];
+      const newActivity = {
+        project: props.project.id,
+        name: `New Activity ${sortedActivities.value.length + 1}`,
+        startDate: today,
+        endDate: today,
+        owner: '',
+        description: '',
+      };
+      const newId = addEntity('activities', newActivity);
+      openActivityModal({ id: newId, data: newActivity });
     }
 
     function openActivityModal(activity) {
@@ -696,6 +736,7 @@ export default {
     }
 
     function editDependency(dep) {
+      isEditingDependency.value = true;
       modalDependency.value = {
         id: dep.id,
         sourceId: dep.data.sourceId,
@@ -708,9 +749,20 @@ export default {
       removeEntity('dependencies', id);
     }
 
+    function openDependencyModal() {
+      isEditingDependency.value = false;
+      modalDependency.value = {
+        sourceId: sortedActivities.value[0]?.id || '',
+        targetId: sortedActivities.value[1]?.id || sortedActivities.value[0]?.id || '',
+        dependencyType: 'FS',
+      };
+      showDependencyModal.value = true;
+    }
+
     function closeDependencyModal() {
       showDependencyModal.value = false;
       modalDependency.value = {};
+      isEditingDependency.value = false;
     }
 
     function saveDependencyModal() {
@@ -723,7 +775,7 @@ export default {
         conflict: detectConflict({ data: modalDependency.value }),
       };
 
-      if (modalDependency.value.id) {
+      if (isEditingDependency.value && modalDependency.value.id) {
         updateEntity('dependencies', modalDependency.value.id, depData);
       } else {
         addEntity('dependencies', depData);
@@ -754,6 +806,7 @@ export default {
       showDependencyModal,
       modalActivity,
       modalDependency,
+      isEditingDependency,
       updateScrollPosition,
       formatDate,
       getDateLabelPosition,
@@ -767,11 +820,13 @@ export default {
       startPan,
       toggleSelection,
       handleShiftSelect,
+      addActivity,
       openActivityModal,
       closeActivityModal,
       saveActivityModal,
       editDependency,
       deleteDependency,
+      openDependencyModal,
       closeDependencyModal,
       saveDependencyModal,
       getActivityName,
