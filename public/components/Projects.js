@@ -15,6 +15,28 @@ export default {
   },
   template: `
     <div class="flex h-[calc(100vh-8rem)] bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+      <!-- Project Summary Modal -->
+      <div v-if="showSummaryModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg w-1/2 max-h-[80vh] overflow-y-auto">
+          <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Project Summary</h3>
+          <div class="space-y-4">
+            <textarea v-model="projectSummary" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" rows="10"></textarea>
+            <div class="flex justify-between">
+              <button @click="generateSummary" class="px-4 py-2 bg-blue-600 text-white rounded flex items-center" :disabled="isGeneratingSummary">
+                <i class="pi pi-file-word mr-2"></i>
+                <span v-if="isGeneratingSummary">Generating...</span>
+                <span v-else>Generate Summary</span>
+              </button>
+              <button @click="copySummary" class="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-gray-100 rounded">Copy</button>
+            </div>
+          </div>
+          <div class="mt-6 flex justify-end space-x-2">
+            <button @click="closeSummaryModal" class="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-gray-100 rounded">Cancel</button>
+            <button @click="saveSummary" class="px-4 py-2 bg-blue-600 text-white rounded">Save</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Projects Sidebar (Left) -->
       <div class="w-1/4 border-r border-gray-200 dark:border-gray-700 flex flex-col">
         <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-4 bg-gray-50 dark:bg-gray-900">
@@ -31,7 +53,7 @@ export default {
           <div v-for="project in entities?.projects || []" :key="project.id" class="p-4 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-all" :class="{ 'bg-blue-50 dark:bg-blue-900': activeProjectId === project.id }" @click="selectProject(project.id)">
             <div class="flex-1 truncate">
               <span v-if="isEditingProject !== project.id" class="text-gray-900 dark:text-white font-medium">{{ project.data.name }}</span>
-              <input v-else v-model="project.data.name" type="text" class="bg-transparent text-gray-900 dark:text-white flex-1 outline-none font-medium w-full" @blur="updateProject(project)" @keypress.enter="updateProject(project)" :id="'project-input-' + project.id" />
+              <input v-else v-model="project.data.name" type="text" class="bg-transparent text-gray-900 dark:text-white flex-1 outline-none font-medium w-full" @blur="updateProject(project)" @keydown.enter="updateProject(project)" :id="'project-input-' + project.id" />
             </div>
             <div class="flex gap-2">
               <button @click.stop="editProjectName(project)" class="text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400">
@@ -54,24 +76,27 @@ export default {
           <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 sticky top-0 z-10">
             <div class="flex items-center justify-between">
               <div class="flex items-center space-x-2">
-                <h3 v-if="!isEditingProjectName" @click="isEditingProjectName = true" class="text-xl font-semibold cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded" :class="darkMode ? 'text-white' : 'text-gray-900'">{{ activeProject.data.name }}</h3>
-                <input v-else v-model="projectName" type="text" class="text-xl font-semibold bg-transparent border border-gray-200 dark:border-gray-600 rounded p-1 w-full" :class="darkMode ? 'text-white' : 'text-gray-900'" @blur="saveProjectName" @keypress.enter="saveProjectName" />
+                <h3 v-if="!isEditingProjectName" class="text-xl font-semibold" :class="darkMode ? 'text-white' : 'text-gray-900'">{{ activeProject.data.name }}</h3>
+                <input v-else v-model="projectName" type="text" class="text-xl font-semibold bg-transparent border border-gray-200 dark:border-gray-600 rounded p-1 w-full" :class="darkMode ? 'text-white' : 'text-gray-900'" @blur="saveProjectName" @keydown.enter="saveProjectName" />
+                <button @click="openSummaryModal" class="text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400">
+                  <i class="pi pi-clipboard"></i>
+                </button>
               </div>
               <button @click="exportProject" class="py-1 px-3 bg-blue-500 dark:bg-blue-400 hover:bg-blue-600 text-white rounded-lg transition-all">
                 Export Project (JSON)
               </button>
             </div>
             <p v-if="!isEditingDescription" @click="isEditingDescription = true" class="text-gray-600 dark:text-gray-300 mt-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded">{{ activeProject.data.description || 'No description provided.' }}</p>
-            <textarea v-else v-model="projectDescription" class="w-full p-1 bg-transparent border border-gray-200 dark:border-gray-600 rounded text-gray-600 dark:text-gray-300" @blur="saveProjectDescription" @keypress.enter="saveProjectDescription"></textarea>
+            <textarea v-else v-model="projectDescription" class="w-full p-1 bg-transparent border border-gray-200 dark:border-gray-600 rounded text-gray-600 dark:text-gray-300" @blur="saveProjectDescription" @keydown.enter="saveProjectDescription"></textarea>
             <div class="flex gap-4 mt-2 text-sm text-gray-500 dark:text-gray-400">
               <span v-if="!isEditingBudget" @click="isEditingBudget = true" class="cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded">Budget: {{ activeProject.data.budget ? '$' + activeProject.data.budget.toLocaleString() : 'N/A' }}</span>
-              <input v-else v-model="projectBudget" type="number" class="bg-transparent border border-gray-200 dark:border-gray-600 rounded p-1 text-gray-500 dark:text-gray-400" @blur="saveProjectBudget" @keypress.enter="saveProjectBudget" />
+              <input v-else v-model="projectBudget" type="number" class="bg-transparent border border-gray-200 dark:border-gray-600 rounded p-1 text-gray-500 dark:text-gray-400" @blur="saveProjectBudget" @keydown.enter="saveProjectBudget" />
               <span v-if="!isEditingOutcomes" @click="isEditingOutcomes = true" class="cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded">Outcomes: {{ activeProject.data.outcomes || 'N/A' }}</span>
-              <input v-else v-model="projectOutcomes" type="text" class="bg-transparent border border-gray-200 dark:border-gray-600 rounded p-1 text-gray-500 dark:text-gray-400" @blur="saveProjectOutcomes" @keypress.enter="saveProjectOutcomes" />
+              <input v-else v-model="projectOutcomes" type="text" class="bg-transparent border border-gray-200 dark:border-gray-600 rounded p-1 text-gray-500 dark:text-gray-400" @blur="saveProjectOutcomes" @keydown.enter="saveProjectOutcomes" />
             </div>
           </div>
           <div class="flex-1 overflow-y-auto overflow-x-hidden">
-            <gantt :project="activeProject" :activities="projectActivities" :dependencies="projectDependencies" :darkMode="darkMode" ref="gantt" @clear-selections="clearSelections" />
+            <gantt :project="activeProject" :activities="projectActivities" :dependencies="projectDependencies" :darkMode="darkMode" :key="ganttKey" ref="gantt" @clear-selections="handleClearSelections" @activity-changed="handleActivityChanged" />
           </div>
         </div>
         <div v-else class="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
@@ -79,7 +104,7 @@ export default {
         </div>
         <div v-if="activeProject" class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
           <div class="flex gap-3 items-center">
-            <textarea v-model="draft" rows="2" class="flex-1 p-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:outline-none transition-all resize-none whitespace-pre-wrap" :placeholder="inputPlaceholder" @keypress.enter="handleEnterKey"></textarea>
+            <textarea v-model="draft" rows="2" class="flex-1 p-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:outline-none transition-all resize-none whitespace-pre-wrap" :placeholder="inputPlaceholder" @keydown.enter="handleEnterKey"></textarea>
             <button @click="sendMessage" class="py-2 px-4 bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 text-white rounded-lg transition-all flex items-center" :disabled="!draft?.trim() || !selectedModel || !activeProjectId || isSending">
               <span v-if="!isSending">Generate</span>
               <span v-else class="flex items-center">
@@ -126,7 +151,7 @@ export default {
           </div>
           <div class="p-4 border-t border-gray-200 dark:border-gray-700">
             <div class="flex gap-3">
-              <textarea v-model="chatDraft" rows="1" class="flex-1 p-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:outline-none transition-all resize-none whitespace-pre-wrap" placeholder="Chat with team members..." @keypress.enter="sendChatMessage"></textarea>
+              <textarea v-model="chatDraft" rows="1" class="flex-1 p-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:outline-none transition-all resize-none whitespace-pre-wrap" placeholder="Chat with team members..." @keydown.enter="sendChatMessage"></textarea>
               <button @click="sendChatMessage" class="py-2 px-4 bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 text-white rounded-lg transition-all" :disabled="!chatDraft?.trim() || !activeProjectId">
                 Send
               </button>
@@ -157,6 +182,11 @@ export default {
     const projectOutcomes = Vue.ref('');
     const isChatOpen = Vue.ref(true);
     const gantt = Vue.ref(null);
+    const showSummaryModal = Vue.ref(false);
+    const projectSummary = Vue.ref('');
+    const isGeneratingSummary = Vue.ref(false);
+    const selectedActivityIds = Vue.ref([]); // Shared state to manage selections
+    const ganttKey = Vue.ref(0); // Key to force re-render of Gantt component
 
     const activeProject = Vue.computed(() => {
       return entities.value?.projects?.find(p => p.id === activeProjectId.value) || null;
@@ -164,20 +194,21 @@ export default {
 
     const projectActivities = Vue.computed(() => {
       if (!activeProjectId.value) return [];
-      return (entities.value?.activities || [])
+      const activities = entities.value?.activities || [];
+      return activities
         .filter(a => a.data.project === activeProjectId.value)
         .sort((a, b) => new Date(a.data.startDate) - new Date(b.data.startDate));
     });
 
     const projectDependencies = Vue.computed(() => {
       if (!activeProjectId.value) return [];
-      return (entities.value?.dependencies || [])
+      const dependencies = entities.value?.dependencies || [];
+      return dependencies
         .filter(d => projectActivities.value.some(a => a.id === d.data.sourceId || a.id === d.data.targetId));
     });
 
     const projectChats = Vue.computed(() => {
       if (!activeProjectId.value) return [];
-      // Ensure entities.value and entities.value.chats are defined
       const chats = entities.value?.chats || [];
       return chats
         .filter(c => c.data.project === activeProjectId.value)
@@ -186,7 +217,7 @@ export default {
 
     const inputPlaceholder = Vue.computed(() => {
       if (!activeProjectId.value) return 'Select a project to start planning...';
-      if (gantt.value?.selectedActivityIds?.length) {
+      if (selectedActivityIds.value.length > 0) {
         return 'Describe changes to selected activities or dependencies...';
       }
       return 'Describe your project, activities, or dependencies to generate a plan...';
@@ -210,6 +241,7 @@ export default {
           projectDescription.value = newProject.data.description || '';
           projectBudget.value = newProject.data.budget || null;
           projectOutcomes.value = newProject.data.outcomes || '';
+          projectSummary.value = newProject.data.summary?.text || '';
         }
       },
       { immediate: true }
@@ -231,15 +263,18 @@ export default {
         description: '',
         budget: null,
         outcomes: '',
+        summary: '',
         llmResponses: [],
         llmLastResponse: null,
       });
       activeProjectId.value = id;
+      selectedActivityIds.value = []; // Clear selections when switching projects
     }
 
     function selectProject(id) {
       activeProjectId.value = id;
       isEditingProject.value = null;
+      selectedActivityIds.value = []; // Clear selections when switching projects
     }
 
     function editProjectName(project) {
@@ -272,6 +307,7 @@ export default {
       if (activeProjectId.value === id) {
         activeProjectId.value = entities.value?.projects?.[0]?.id || null;
       }
+      selectedActivityIds.value = []; // Clear selections when deleting a project
     }
 
     function saveProjectName() {
@@ -304,6 +340,80 @@ export default {
         outcomes: projectOutcomes.value,
       });
       isEditingOutcomes.value = false;
+    }
+
+    function openSummaryModal() {
+      projectSummary.value = activeProject.value.data.summary?.text || '';
+      showSummaryModal.value = true;
+    }
+
+    function closeSummaryModal() {
+      showSummaryModal.value = false;
+      projectSummary.value = '';
+    }
+
+    function saveSummary() {
+      updateEntity('projects', activeProjectId.value, {
+        ...activeProject.value.data,
+        summary: { text: projectSummary.value, isStreaming: false, timestamp: Date.now() },
+      });
+      closeSummaryModal();
+    }
+
+    function copySummary() {
+      navigator.clipboard.writeText(projectSummary.value).then(() => {
+        console.log('Summary copied to clipboard');
+      });
+    }
+
+    function generateSummary() {
+      if (!activeProjectId.value || !selectedModel.value || isGeneratingSummary.value) return;
+      isGeneratingSummary.value = true;
+
+      updateEntity('projects', activeProjectId.value, {
+        ...activeProject.value.data,
+        llmLastResponse: { text: '', isStreaming: true, timestamp: Date.now() },
+      });
+
+      const messageHistory = [];
+      messageHistory.push({
+        role: 'user',
+        content: `Current project: ${JSON.stringify(activeProject.value.data)}`,
+      });
+      if (projectActivities.value.length) {
+        messageHistory.push({
+          role: 'user',
+          content: `Current activities: ${JSON.stringify(projectActivities.value.map(a => a.data))}`,
+        });
+      }
+      if (projectDependencies.value.length) {
+        messageHistory.push({
+          role: 'user',
+          content: `Current dependencies: ${JSON.stringify(projectDependencies.value.map(d => d.data))}`,
+        });
+      }
+
+      messageHistory.push({
+        role: 'user',
+        content: `Read the entire selected project, its activities, and dependencies. Write a clear and comprehensive executive summary of the project, including the project team (owners) for the initiatives, the overall start and end dates, and the expected outcomes. Return the summary as plain text, no JSON or additional formatting.`,
+      });
+
+      const model = models.value.find(m => m.model === selectedModel.value) || {
+        provider: 'xai',
+        name: 'grok-3',
+        model: 'grok-3',
+      };
+
+      try {
+        triggerLLM('projects', activeProjectId.value, {
+          provider: model.provider,
+          name: model.name.en,
+          model: model.model,
+        }, 0.7, '', 'Generate project summary', messageHistory, true);
+      } catch (error) {
+        console.error('Error triggering LLM for summary:', error);
+        isGeneratingSummary.value = false;
+      }
     }
 
     function exportProject() {
@@ -375,9 +485,31 @@ export default {
       isChatOpen.value = !isChatOpen.value;
     }
 
+    function handleClearSelections(selectedId) {
+      // Clear all selections except the newly selected ID (if provided)
+      if (selectedId) {
+        selectedActivityIds.value = [selectedId];
+      } else {
+        selectedActivityIds.value = [];
+      }
+      // Sync with Gantt component if it exists
+      if (gantt.value && typeof gantt.value.clearSelections === 'function') {
+        gantt.value.clearSelections();
+      }
+    }
+
+    function handleActivityChanged() {
+      // Force re-render of Gantt component to recalculate timeline and bars
+      ganttKey.value += 1;
+    }
+
     function sendMessage() {
       if (!draft.value.trim() || !selectedModel.value || !activeProjectId.value || isSending.value) return;
       isSending.value = true;
+
+      // Clear the input box immediately after sending
+      const messageToSend = draft.value;
+      draft.value = '';
 
       updateEntity('projects', activeProjectId.value, {
         ...activeProject.value.data,
@@ -385,8 +517,8 @@ export default {
       });
 
       const messageHistory = [];
-      const selectedActivities = gantt.value?.selectedActivityIds?.length
-        ? projectActivities.value.filter(a => gantt.value.selectedActivityIds.includes(a.id))
+      const selectedActivities = selectedActivityIds.value.length
+        ? projectActivities.value.filter(a => selectedActivityIds.value.includes(a.id))
         : [];
 
       messageHistory.push({
@@ -423,7 +555,7 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. U
 
       messageHistory.push({
         role: 'user',
-        content: `${draft.value}\n\n${jsonInstruction}`,
+        content: `${messageToSend}\n\n${jsonInstruction}`,
       });
 
       const model = models.value.find(m => m.model === selectedModel.value) || {
@@ -436,7 +568,7 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. U
           provider: model.provider,
           name: model.name.en,
           model: model.model,
-        }, 0.7, '', draft.value, messageHistory, true);
+        }, 0.7, '', messageToSend, messageHistory, true);
       } catch (error) {
         console.error('Error triggering LLM:', error);
         const llmResponses = activeProject.value.data.llmResponses || [];
@@ -466,212 +598,230 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. U
           isStreaming: true,
         },
       });
+      if (!eventObj.data.content.startsWith('```json')) {
+        projectSummary.value = updatedText;
+      }
     }
 
     function handleLLMEnd(eventObj) {
       if (eventObj.data.entityType !== 'projects' || !activeProject.value || eventObj.id !== activeProjectId.value) return;
       const currentResponse = activeProject.value.data.llmLastResponse;
-      if (!currentResponse) return;
+      if (!currentResponse) {
+        isSending.value = false;
+        isGeneratingSummary.value = false;
+        return;
+      }
 
       let responseText = currentResponse.text || '';
-      responseText = responseText.replace(/```json\n|\n```/g, '').trim();
       const llmResponses = activeProject.value.data.llmResponses || [];
-      llmResponses.push({
+      const newResponse = {
         text: responseText,
         isStreaming: false,
         timestamp: currentResponse.timestamp,
-      });
+      };
+      llmResponses.push(newResponse);
 
-      try {
-        const parsed = JSON5.parse(responseText);
+      if (responseText.startsWith('```json')) {
+        responseText = responseText.replace(/```json\n|\n```/g, '').trim();
+        try {
+          const parsed = JSON5.parse(responseText);
 
-        if (parsed.project) {
-          updateEntity('projects', activeProjectId.value, {
-            ...activeProject.value.data,
-            ...parsed.project,
-            llmResponses,
-            llmLastResponse: null,
-          });
-          activeProject.value.data = {
-            ...activeProject.value.data,
-            ...parsed.project,
-            llmResponses,
-            llmLastResponse: null,
-          };
-        } else {
-          updateEntity('projects', activeProjectId.value, {
-            ...activeProject.value.data,
-            llmResponses,
-            llmLastResponse: null,
-          });
-          activeProject.value.data.llmResponses = llmResponses;
-          activeProject.value.data.llmLastResponse = null;
-        }
-
-        const activityIdMapping = {};
-        const tempActivities = [];
-
-        if (parsed.activities) {
-          parsed.activities.forEach((act, index) => {
-            const newId = addEntity('activities', {
-              project: activeProjectId.value,
-              ...act,
+          if (parsed.project) {
+            updateEntity('projects', activeProjectId.value, {
+              ...activeProject.value.data,
+              ...parsed.project,
+              llmResponses,
+              llmLastResponse: null,
             });
-            tempActivities.push({ id: newId, name: act.name, originalIndex: index });
-            activityIdMapping[index] = newId;
-            if (act.name) activityIdMapping[act.name] = newId;
-          });
-        }
-
-        if (parsed.activitiesToAdd) {
-          parsed.activitiesToAdd.forEach((act, index) => {
-            const newId = addEntity('activities', {
-              project: activeProjectId.value,
-              ...act,
+            activeProject.value.data = {
+              ...activeProject.value.data,
+              ...parsed.project,
+              llmResponses,
+              llmLastResponse: null,
+            };
+          } else {
+            updateEntity('projects', activeProjectId.value, {
+              ...activeProject.value.data,
+              llmResponses,
+              llmLastResponse: null,
             });
-            tempActivities.push({ id: newId, name: act.name, originalIndex: index + (parsed.activities ? parsed.activities.length : 0) });
-            activityIdMapping[index + (parsed.activities ? parsed.activities.length : 0)] = newId;
-            if (act.name) activityIdMapping[act.name] = newId;
-          });
-        }
+            activeProject.value.data.llmResponses = llmResponses;
+            activeProject.value.data.llmLastResponse = null;
+          }
 
-        if (parsed.activitiesToUpdate) {
-          parsed.activitiesToUpdate.forEach(update => {
-            const act = entities.value?.activities?.find(a => a.id === update.id);
-            if (act) {
-              updateEntity('activities', update.id, {
-                ...act.data,
-                ...update,
+          const activityIdMapping = {};
+          const tempActivities = [];
+
+          if (parsed.activities) {
+            parsed.activities.forEach((act, index) => {
+              const newId = addEntity('activities', {
+                project: activeProjectId.value,
+                ...act,
               });
-              const index = entities.value?.activities?.findIndex(a => a.id === update.id) ?? -1;
-              if (index !== -1) {
-                entities.value.activities[index] = {
-                  ...entities.value.activities[index],
-                  data: {
-                    ...entities.value.activities[index].data,
-                    ...update,
-                  },
-                };
-              }
-            }
-          });
-        }
+              tempActivities.push({ id: newId, name: act.name, originalIndex: index });
+              activityIdMapping[index] = newId;
+              if (act.name) activityIdMapping[act.name] = newId;
+            });
+          }
 
-        if (parsed.activitiesToDelete) {
-          parsed.activitiesToDelete.forEach(id => {
-            if (entities.value?.activities?.some(a => a.id === id)) {
-              removeEntity('activities', id);
-              entities.value.activities = (entities.value?.activities || []).filter(a => a.id !== id);
-            }
-          });
-        }
-
-        if (parsed.dependencies) {
-          parsed.dependencies.forEach(dep => {
-            let sourceId = dep.sourceId;
-            let targetId = dep.targetId;
-            if (!isNaN(dep.sourceId)) sourceId = activityIdMapping[parseInt(dep.sourceId)];
-            else if (typeof dep.sourceId === 'string') sourceId = activityIdMapping[dep.sourceId];
-            if (!isNaN(dep.targetId)) targetId = activityIdMapping[parseInt(dep.targetId)];
-            else if (typeof dep.targetId === 'string') targetId = activityIdMapping[dep.targetId];
-
-            if (sourceId && targetId && sourceId !== targetId) {
-              addEntity('dependencies', {
-                sourceId,
-                targetId,
-                dependencyType: dep.dependencyType,
+          if (parsed.activitiesToAdd) {
+            parsed.activitiesToAdd.forEach((act, index) => {
+              const newId = addEntity('activities', {
+                project: activeProjectId.value,
+                ...act,
               });
-            }
-          });
-        }
+              tempActivities.push({ id: newId, name: act.name, originalIndex: index + (parsed.activities ? parsed.activities.length : 0) });
+              activityIdMapping[index + (parsed.activities ? parsed.activities.length : 0)] = newId;
+              if (act.name) activityIdMapping[act.name] = newId;
+            });
+          }
 
-        if (parsed.dependenciesToAdd) {
-          parsed.dependenciesToAdd.forEach(dep => {
-            let sourceId = dep.sourceId;
-            let targetId = dep.targetId;
-            if (!isNaN(dep.sourceId)) sourceId = activityIdMapping[parseInt(dep.sourceId)];
-            else if (typeof dep.sourceId === 'string') sourceId = activityIdMapping[dep.sourceId];
-            if (!isNaN(dep.targetId)) targetId = activityIdMapping[parseInt(dep.targetId)];
-            else if (typeof dep.targetId === 'string') targetId = activityIdMapping[dep.targetId];
-
-            if (sourceId && targetId && sourceId !== targetId) {
-              addEntity('dependencies', {
-                sourceId,
-                targetId,
-                dependencyType: dep.dependencyType,
-              });
-            }
-          });
-        }
-
-        if (parsed.dependenciesToUpdate) {
-          parsed.dependenciesToUpdate.forEach(update => {
-            const dep = entities.value?.dependencies?.find(d => d.id === update.id);
-            if (dep) {
-              let sourceId = update.sourceId;
-              let targetId = update.targetId;
-              if (!isNaN(update.sourceId)) sourceId = activityIdMapping[parseInt(update.sourceId)];
-              else if (typeof update.sourceId === 'string') sourceId = activityIdMapping[update.sourceId];
-              if (!isNaN(update.targetId)) targetId = activityIdMapping[parseInt(update.targetId)];
-              else if (typeof update.targetId === 'string') targetId = activityIdMapping[update.targetId];
-
-              if (sourceId && targetId && sourceId !== targetId) {
-                updateEntity('dependencies', update.id, {
-                  ...dep.data,
-                  sourceId,
-                  targetId,
-                  dependencyType: update.dependencyType,
+          if (parsed.activitiesToUpdate) {
+            parsed.activitiesToUpdate.forEach(update => {
+              const act = entities.value?.activities?.find(a => a.id === update.id);
+              if (act) {
+                updateEntity('activities', update.id, {
+                  ...act.data,
+                  ...update,
                 });
-                const index = entities.value?.dependencies?.findIndex(d => d.id === update.id) ?? -1;
+                const index = entities.value?.activities?.findIndex(a => a.id === update.id) ?? -1;
                 if (index !== -1) {
-                  entities.value.dependencies[index] = {
-                    ...entities.value.dependencies[index],
+                  entities.value.activities[index] = {
+                    ...entities.value.activities[index],
                     data: {
-                      ...entities.value.dependencies[index].data,
-                      sourceId,
-                      targetId,
-                      dependencyType: update.dependencyType,
+                      ...entities.value.activities[index].data,
+                      ...update,
                     },
                   };
                 }
               }
-            }
+            });
+          }
+
+          if (parsed.activitiesToDelete) {
+            parsed.activitiesToDelete.forEach(id => {
+              if (entities.value?.activities?.some(a => a.id === id)) {
+                removeEntity('activities', id);
+                entities.value.activities = (entities.value?.activities || []).filter(a => a.id !== id);
+              }
+            });
+          }
+
+          if (parsed.dependencies) {
+            parsed.dependencies.forEach(dep => {
+              let sourceId = dep.sourceId;
+              let targetId = dep.targetId;
+              if (!isNaN(dep.sourceId)) sourceId = activityIdMapping[parseInt(dep.sourceId)];
+              else if (typeof dep.sourceId === 'string') sourceId = activityIdMapping[dep.sourceId];
+              if (!isNaN(dep.targetId)) targetId = activityIdMapping[parseInt(dep.targetId)];
+              else if (typeof dep.targetId === 'string') targetId = activityIdMapping[dep.targetId];
+
+              if (sourceId && targetId && sourceId !== targetId) {
+                addEntity('dependencies', {
+                  sourceId,
+                  targetId,
+                  dependencyType: dep.dependencyType,
+                });
+              }
+            });
+          }
+
+          if (parsed.dependenciesToAdd) {
+            parsed.dependenciesToAdd.forEach(dep => {
+              let sourceId = dep.sourceId;
+              let targetId = dep.targetId;
+              if (!isNaN(dep.sourceId)) sourceId = activityIdMapping[parseInt(dep.sourceId)];
+              else if (typeof dep.sourceId === 'string') sourceId = activityIdMapping[dep.sourceId];
+              if (!isNaN(dep.targetId)) targetId = activityIdMapping[parseInt(dep.targetId)];
+              else if (typeof dep.targetId === 'string') targetId = activityIdMapping[dep.targetId];
+
+              if (sourceId && targetId && sourceId !== targetId) {
+                addEntity('dependencies', {
+                  sourceId,
+                  targetId,
+                  dependencyType: dep.dependencyType,
+                });
+              }
+            });
+          }
+
+          if (parsed.dependenciesToUpdate) {
+            parsed.dependenciesToUpdate.forEach(update => {
+              const dep = entities.value?.dependencies?.find(d => d.id === update.id);
+              if (dep) {
+                let sourceId = update.sourceId;
+                let targetId = update.targetId;
+                if (!isNaN(update.sourceId)) sourceId = activityIdMapping[parseInt(update.sourceId)];
+                else if (typeof update.sourceId === 'string') sourceId = activityIdMapping[update.sourceId];
+                if (!isNaN(update.targetId)) targetId = activityIdMapping[parseInt(update.targetId)];
+                else if (typeof update.targetId === 'string') targetId = activityIdMapping[update.targetId];
+
+                if (sourceId && targetId && sourceId !== targetId) {
+                  updateEntity('dependencies', update.id, {
+                    ...dep.data,
+                    sourceId,
+                    targetId,
+                    dependencyType: update.dependencyType,
+                  });
+                  const index = entities.value?.dependencies?.findIndex(d => d.id === update.id) ?? -1;
+                  if (index !== -1) {
+                    entities.value.dependencies[index] = {
+                      ...entities.value.dependencies[index],
+                      data: {
+                        ...entities.value.dependencies[index].data,
+                        sourceId,
+                        targetId,
+                        dependencyType: update.dependencyType,
+                      },
+                    };
+                  }
+                }
+              }
+            });
+          }
+
+          if (parsed.dependenciesToDelete) {
+            parsed.dependenciesToDelete.forEach(id => {
+              if (entities.value?.dependencies?.some(d => d.id === id)) {
+                removeEntity('dependencies', id);
+                entities.value.dependencies = (entities.value?.dependencies || []).filter(d => d.id !== id);
+              }
+            });
+          }
+        } catch (error) {
+          console.error('Error parsing LLM response:', error);
+          llmResponses[llmResponses.length - 1] = {
+            ...llmResponses[llmResponses.length - 1],
+            text: 'Error: Invalid JSON response',
+            isStreaming: false,
+          };
+          updateEntity('projects', activeProjectId.value, {
+            ...activeProject.value.data,
+            llmResponses,
+            llmLastResponse: null,
           });
         }
-
-        if (parsed.dependenciesToDelete) {
-          parsed.dependenciesToDelete.forEach(id => {
-            if (entities.value?.dependencies?.some(d => d.id === id)) {
-              removeEntity('dependencies', id);
-              entities.value.dependencies = (entities.value?.dependencies || []).filter(d => d.id !== id);
-            }
-          });
-        }
-
-      } catch (error) {
-        console.error('Error parsing LLM response:', error);
-        llmResponses[llmResponses.length - 1] = {
-          ...llmResponses[llmResponses.length - 1],
-          text: 'Error: Invalid JSON response',
-          isStreaming: false,
-        };
+      } else {
+        // For non-JSON responses (like the summary), set data.summary to the full last llmResponses item
+        const lastResponse = llmResponses[llmResponses.length - 1];
         updateEntity('projects', activeProjectId.value, {
           ...activeProject.value.data,
+          summary: lastResponse, // Set the full response object as data.summary
           llmResponses,
           llmLastResponse: null,
         });
+        activeProject.value.data.summary = lastResponse;
+        projectSummary.value = lastResponse.text; // Update the textarea with the text property
       }
 
-      if (gantt.value) {
+      isSending.value = false; // Ensure spinner stops
+      isGeneratingSummary.value = false;
+      selectedActivityIds.value = []; // Clear selections directly
+      if (gantt.value && typeof gantt.value.clearSelections === 'function') {
         gantt.value.clearSelections();
       }
-      isSending.value = false;
-    }
-
-    function clearSelections() {
-      if (gantt.value) {
-        gantt.value.clearSelections();
-      }
+      // Force Gantt recalculation after LLM updates
+      ganttKey.value += 1;
     }
 
     const { on } = useRealTime();
@@ -704,6 +854,11 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. U
       isChatOpen,
       gantt,
       models,
+      showSummaryModal,
+      projectSummary,
+      isGeneratingSummary,
+      selectedActivityIds,
+      ganttKey,
       addProject,
       selectProject,
       editProjectName,
@@ -713,14 +868,20 @@ Dates must be in ISO format (YYYY-MM-DD). Dependency types are FS, FF, SS, SF. U
       saveProjectDescription,
       saveProjectBudget,
       saveProjectOutcomes,
+      openSummaryModal,
+      closeSummaryModal,
+      saveSummary,
+      copySummary,
+      generateSummary,
       exportProject,
       renderMarkdown,
       formatTime,
       handleEnterKey,
       sendChatMessage,
       toggleChat,
+      handleClearSelections,
+      handleActivityChanged,
       sendMessage,
-      clearSelections,
     };
   },
 };

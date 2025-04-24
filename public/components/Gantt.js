@@ -10,9 +10,11 @@ export default {
     },
     activities: {
       type: Array,
+      default: () => [],
     },
     dependencies: {
       type: Array,
+      default: () => [],
       required: true,
     },
     darkMode: {
@@ -25,7 +27,7 @@ export default {
       <!-- Modal for Activity Editing -->
       <div v-if="showActivityModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white dark:bg-gray-800 p-6 rounded-lg w-1/3">
-          <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Edit Activity</h3>
+          <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">{{ modalActivity.id ? 'Edit Activity' : 'Add Activity' }}</h3>
           <div class="space-y-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Name</label>
@@ -49,8 +51,9 @@ export default {
             </div>
           </div>
           <div class="mt-6 flex justify-end space-x-2">
+            <button v-if="modalActivity.id" @click="deleteActivity(modalActivity.id)" class="px-4 py-2 bg-red-600 text-white rounded">Delete</button>
             <button @click="closeActivityModal" class="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-gray-100 rounded">Cancel</button>
-            <button @click="saveActivityModal" class="px-4 py-2 bg-blue-600 text-white rounded">Save</button>
+            <button @click="saveActivityModal" class="px-4 py-2 bg-blue-600 text-white rounded">{{ modalActivity.id ? 'Save' : 'Add' }}</button>
           </div>
         </div>
       </div>
@@ -105,7 +108,7 @@ export default {
           </div>
           <div class="mt-6 flex justify-end space-x-2">
             <button @click="closeDependencyModal" class="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-gray-100 rounded">Cancel</button>
-            <button @click="saveDependencyModal" class="px-4 py-2 bg-blue-600 text-white rounded">Save</button>
+            <button @click="saveDependencyModal" class="px-4 py-2 bg-blue-600 text-white rounded">{{ isEditingDependency ? 'Save' : 'Add' }}</button>
           </div>
         </div>
       </div>
@@ -120,7 +123,7 @@ export default {
               <button @click="addActivity" class="text-blue-500">
                 <i class="pi pi-plus"></i>
               </button>
-              <button @click="showDependencyModal = true" class="text-blue-500">
+              <button @click="openDependencyModal" class="text-blue-500">
                 <i class="pi pi-list-check"></i>
               </button>
             </div>
@@ -179,9 +182,9 @@ export default {
                   <rect
                     v-if="!isSingleDay(activity)"
                     :id="'gantt-element-' + activity.id"
-                    :x="getPosition(activity.data.startDate)"
+                    :x="getPosition(draggingActivityId === activity.id ? tempActivityDates[activity.id]?.startDate || activity.data.startDate : activity.data.startDate)"
                     :y="index * 64 + 20"
-                    :width="getPosition(activity.data.endDate || activity.data.startDate) - getPosition(activity.data.startDate)"
+                    :width="getPosition(draggingActivityId === activity.id ? tempActivityDates[activity.id]?.endDate || activity.data.endDate || activity.data.startDate : activity.data.endDate || activity.data.startDate) - getPosition(draggingActivityId === activity.id ? tempActivityDates[activity.id]?.startDate || activity.data.startDate : activity.data.startDate)"
                     :height="16"
                     :fill="getBarFill(activity).fill"
                     :stroke="getBarFill(activity).stroke"
@@ -194,7 +197,7 @@ export default {
                   />
                   <rect
                     v-if="!isSingleDay(activity)"
-                    :x="getPosition(activity.data.startDate) - 4"
+                    :x="getPosition(draggingActivityId === activity.id ? tempActivityDates[activity.id]?.startDate || activity.data.startDate : activity.data.startDate) - 4"
                     :y="index * 64 + 20"
                     width="8"
                     height="16"
@@ -204,7 +207,7 @@ export default {
                   />
                   <rect
                     v-if="!isSingleDay(activity)"
-                    :x="getPosition(activity.data.endDate || activity.data.startDate) - 4"
+                    :x="getPosition(draggingActivityId === activity.id ? tempActivityDates[activity.id]?.endDate || activity.data.endDate || activity.data.startDate : activity.data.endDate || activity.data.startDate) - 4"
                     :y="index * 64 + 20"
                     width="8"
                     height="16"
@@ -215,7 +218,7 @@ export default {
                   <rect
                     v-if="isSingleDay(activity)"
                     :id="'gantt-element-' + activity.id"
-                    :x="getPosition(activity.data.startDate) - 12"
+                    :x="getPosition(draggingActivityId === activity.id ? tempActivityDates[activity.id]?.startDate || activity.data.startDate : activity.data.startDate) - 12"
                     :y="index * 64 + 16"
                     width="24"
                     height="24"
@@ -262,31 +265,39 @@ export default {
     const timelineScale = Vue.ref('days');
     const availableWidth = Vue.ref(800);
     const dragging = Vue.ref(null);
+    const draggingActivityId = Vue.ref(null);
+    const tempActivityDates = Vue.ref({});
     const showActivityModal = Vue.ref(false);
     const showDependencyModal = Vue.ref(false);
     const modalActivity = Vue.ref({});
     const modalDependency = Vue.ref({});
     const isEditingDependency = Vue.ref(false);
+    let debounceTimeout = null;
 
-    const sortedActivities = Vue.computed(() => 
-      [...props.activities]
+    const sortedActivities = Vue.computed(() => {
+      if (!Array.isArray(props.activities)) return [];
+      return [...props.activities]
         .filter(activity => activity && activity.data && activity.data.startDate)
-        .sort((a, b) => new Date(a.data.startDate) - new Date(b.data.startDate))
-    );
+        .sort((a, b) => new Date(a.data.startDate) - new Date(b.data.startDate));
+    });
 
-    const sortedDependencies = Vue.computed(() => 
-      [...props.dependencies]
+    const sortedDependencies = Vue.computed(() => {
+      if (!Array.isArray(props.dependencies)) return [];
+      return [...props.dependencies]
         .filter(dep => dep && dep.data && dep.data.sourceId && dep.data.targetId)
-        .sort((a, b) => a.id.localeCompare(b.id))
-    );
+        .sort((a, b) => a.id.localeCompare(b.id));
+    });
 
     function debounce(fn, wait) {
-      let timeout;
       return (...args) => {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => fn(...args), wait);
+        clearTimeout(debounceTimeout);
+        debounceTimeout = setTimeout(() => fn(...args), wait);
       };
     }
+
+    const debouncedSortAndTimelineUpdate = debounce(() => {
+      // Sorting and timeline updates will happen after dragging stops
+    }, 300);
 
     const updateAvailableWidthDebounced = debounce(() => {
       updateAvailableWidth();
@@ -320,7 +331,7 @@ export default {
     }
 
     const timeline = Vue.computed(() => {
-      if (!props.activities.length) return [];
+      if (!Array.isArray(props.activities) || !props.activities.length) return [];
       const dates = [];
       const startDates = props.activities
         .filter(a => a && a.data && a.data.startDate)
@@ -331,11 +342,11 @@ export default {
       const minDate = startDates.length ? Math.min(...startDates) : Date.now();
       const maxDate = endDates.length ? Math.max(...endDates) : Date.now();
       
-      // Extend the timeline by at least 1 month (31 days) past the last end date
-      const oneMonthInMs = 31 * 24 * 60 * 60 * 1000; // 31 days in milliseconds
-      const bufferBefore = 30 * 24 * 60 * 60 * 1000; // 30 days buffer before
+      const oneMonthInMs = 31 * 24 * 60 * 60 * 1000;
+      const bufferBefore = 30 * 24 * 60 * 60 * 1000;
+      const bufferAfter = 30 * 24 * 60 * 60 * 1000; // Ensure buffer for the last date
       const cappedMinDate = minDate - bufferBefore;
-      const cappedMaxDate = Math.max(maxDate + oneMonthInMs, maxDate + bufferBefore);
+      const cappedMaxDate = Math.max(maxDate + oneMonthInMs, maxDate + bufferAfter);
       const diffTime = cappedMaxDate - cappedMinDate;
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -343,10 +354,10 @@ export default {
       let interval;
       if (pixelsPerDay > 20) {
         timelineScale.value = 'days';
-        interval = 1000 * 60 * 60 * 24; // 1 day
+        interval = 1000 * 60 * 60 * 24;
       } else if (pixelsPerDay > 5) {
         timelineScale.value = 'weeks';
-        interval = 1000 * 60 * 60 * 24 * 7; // 1 week
+        interval = 1000 * 60 * 60 * 24 * 7;
       } else if (pixelsPerDay > 1) {
         timelineScale.value = 'months';
         interval = null;
@@ -370,6 +381,12 @@ export default {
           dates.push(new Date(currentDate));
           currentDate.setMonth(currentDate.getMonth() + 1);
         }
+        // Ensure the last date is included if it falls within the range
+        if (currentDate.getTime() > cappedMaxDate && dates[dates.length - 1].getTime() < maxDate) {
+          const lastDate = new Date(maxDate);
+          lastDate.setDate(1);
+          dates.push(lastDate);
+        }
       } else {
         let currentDate = new Date(cappedMinDate);
         currentDate.setMonth(0, 1);
@@ -383,13 +400,13 @@ export default {
 
     const dateWidth = Vue.computed(() => {
       if (!timeline.value || !timeline.value.length) return 40;
-      const idealWidth = availableWidth.value / timeline.value.length;
+      const idealWidth = availableWidth.value / (timeline.value.length - 1); // Adjust for last date
       return Math.max(idealWidth, 40);
     });
 
     const ganttWidth = Vue.computed(() => {
       if (!timeline.value || !timeline.value.length) return availableWidth.value;
-      return timeline.value.length * dateWidth.value;
+      return (timeline.value.length - 1) * dateWidth.value; // Adjust for last date
     });
 
     const ganttHeight = Vue.computed(() => (sortedActivities.value.length + 1) * 64 + 40);
@@ -404,24 +421,23 @@ export default {
     function getDateLabelPosition(date, index) {
       const basePosition = getPosition(date);
       if (index === timeline.value.length - 1) {
-        // For the last date, don't shift (or shift minimally to avoid overflow)
-        return basePosition;
+        return basePosition; // Position the last date at its exact spot
       }
       const nextDate = timeline.value[index + 1];
       const nextPosition = getPosition(nextDate);
       const monthWidth = nextPosition - basePosition;
-      const offset = monthWidth * 0.5; // Shift by 50% of the month width
+      const offset = monthWidth * 0.5;
       return basePosition + offset;
     }
 
     function getDependencyColor(dependencyType) {
       const colorMap = {
-        'FS': '#FF5555', // Red for Finish-to-Start
-        'FF': '#55AAFF', // Blue for Finish-to-Finish
-        'SS': '#55FF55', // Green for Start-to-Start
-        'SF': '#AA55FF', // Purple for Start-to-Finish
+        'FS': '#FF5555',
+        'FF': '#55AAFF',
+        'SS': '#55FF55',
+        'SF': '#AA55FF',
       };
-      return colorMap[dependencyType] || '#000000'; // Default to black if type is unknown
+      return colorMap[dependencyType] || '#000000';
     }
 
     function isSingleDay(activity) {
@@ -438,7 +454,7 @@ export default {
       const timelineEnd = timeline.value[timeline.value.length - 1].getTime();
       const dateTime = new Date(date).getTime();
       const fraction = Math.min(Math.max((dateTime - timelineStart) / (timelineEnd - timelineStart), 0), 1);
-      return fraction * ganttWidth.value;
+      return fraction * (ganttWidth.value);
     }
 
     function getDateFromPosition(x) {
@@ -464,7 +480,13 @@ export default {
       event.stopPropagation();
       const mouseX = getMouseX(event);
       const activity = sortedActivities.value.find(a => a.id === activityId);
+      if (!activity) return;
       dragging.value = { type, activityId, startX: mouseX, originalStart: new Date(activity.data.startDate), originalEnd: activity.data.endDate ? new Date(activity.data.endDate) : null };
+      draggingActivityId.value = activityId;
+      tempActivityDates.value[activityId] = {
+        startDate: activity.data.startDate,
+        endDate: activity.data.endDate || activity.data.startDate,
+      };
     }
 
     function onMouseMove(event) {
@@ -472,32 +494,71 @@ export default {
         const mouseX = getMouseX(event);
         const newDate = getDateFromPosition(mouseX);
         const activity = props.activities.find(a => a.id === dragging.value.activityId);
+        if (!activity) return;
         const deltaMs = newDate.getTime() - dragging.value.originalStart.getTime();
-        let updateData = { ...activity.data };
+        let updatedDates = { ...tempActivityDates.value[dragging.value.activityId] };
 
         if (dragging.value.type === 'start') {
-          updateData.startDate = newDate.toISOString();
-          if (updateData.endDate && new Date(updateData.endDate) < newDate) {
-            updateData.endDate = newDate.toISOString();
+          if (updatedDates.endDate && newDate.getTime() > new Date(updatedDates.endDate).getTime()) {
+            return; // Prevent start date from exceeding end date
           }
+          updatedDates.startDate = newDate.toISOString();
         } else if (dragging.value.type === 'end') {
-          updateData.endDate = newDate.toISOString();
-          if (new Date(updateData.startDate) > newDate) {
-            updateData.startDate = newDate.toISOString();
+          if (newDate.getTime() < new Date(updatedDates.startDate).getTime()) {
+            return; // Prevent end date from being before start date
           }
+          updatedDates.endDate = newDate.toISOString();
         } else if (dragging.value.type === 'bar') {
           const duration = dragging.value.originalEnd ? dragging.value.originalEnd.getTime() - dragging.value.originalStart.getTime() : 0;
-          updateData.startDate = new Date(dragging.value.originalStart.getTime() + deltaMs).toISOString();
+          const newStartDate = new Date(dragging.value.originalStart.getTime() + deltaMs);
           if (dragging.value.originalEnd) {
-            updateData.endDate = new Date(dragging.value.originalStart.getTime() + deltaMs + duration).toISOString();
+            const newEndDate = new Date(dragging.value.originalStart.getTime() + deltaMs + duration);
+            if (newStartDate.getTime() <= newEndDate.getTime()) {
+              updatedDates.startDate = newStartDate.toISOString();
+              updatedDates.endDate = newEndDate.toISOString();
+            } else {
+              return; // Prevent start date from exceeding end date
+            }
+          } else {
+            updatedDates.startDate = newStartDate.toISOString();
+            updatedDates.endDate = newStartDate.toISOString();
           }
         }
 
-        updateEntity('activities', activity.id, updateData);
+        // Update temporary dates for real-time visual feedback
+        tempActivityDates.value[dragging.value.activityId] = updatedDates;
+
+        // Update entity in real-time for dependency violation detection
+        updateEntity('activities', dragging.value.activityId, {
+          ...activity.data,
+          startDate: updatedDates.startDate,
+          endDate: updatedDates.endDate,
+        });
+
+        // Debounce sorting and timeline updates
+        debouncedSortAndTimelineUpdate();
       }
     }
 
     function onMouseUp() {
+      if (dragging.value) {
+        const activityId = dragging.value.activityId;
+        const updatedDates = tempActivityDates.value[activityId];
+        if (updatedDates) {
+          const activity = props.activities.find(a => a.id === activityId);
+          if (activity) {
+            updateEntity('activities', activityId, {
+              ...activity.data,
+              startDate: updatedDates.startDate,
+              endDate: updatedDates.endDate,
+            });
+          }
+        }
+        clearTimeout(debounceTimeout); // Ensure the debounced function runs immediately
+        debouncedSortAndTimelineUpdate();
+        tempActivityDates.value = {};
+        draggingActivityId.value = null;
+      }
       dragging.value = null;
     }
 
@@ -512,6 +573,7 @@ export default {
         const onPanUp = () => {
           document.removeEventListener('mousemove', onPanMove);
           document.removeEventListener('mouseup', onPanUp);
+          updateScrollPosition();
         };
         document.addEventListener('mousemove', onPanMove);
         document.addEventListener('mouseup', onPanUp);
@@ -523,7 +585,6 @@ export default {
         return { fill: '#000000', stroke: 'none', strokeWidth: 0 };
       }
 
-      // Check for dependency violations
       const hasViolation = sortedDependencies.value.some(dep => 
         (dep.data.sourceId === activity.id || dep.data.targetId === activity.id) && detectConflict(dep)
       );
@@ -557,12 +618,12 @@ export default {
         const fromRect = { 
           left: getPosition(fromActivity.data.startDate),
           right: getPosition(fromActivity.data.endDate || fromActivity.data.startDate),
-          middle: fromIndex * 64 + 28, // Adjusted middle of the bar (20 + 16/2)
+          middle: fromIndex * 64 + 28,
         };
         const toRect = { 
           left: getPosition(toActivity.data.startDate),
           right: getPosition(toActivity.data.endDate || toActivity.data.startDate),
-          middle: toIndex * 64 + 28, // Adjusted middle of the bar (20 + 16/2)
+          middle: toIndex * 64 + 28,
         };
 
         const offsetX = 20;
@@ -675,9 +736,13 @@ export default {
       if (selectedActivityIds.value.includes(id)) {
         selectedActivityIds.value = selectedActivityIds.value.filter(aid => aid !== id);
       } else {
-        selectedActivityIds.value.push(id);
+        selectedActivityIds.value = [id]; // Only allow single selection to avoid recursive issues
+        emit('clear-selections', id); // Emit event to notify parent of selection change
       }
-      emit('clear-selections');
+    }
+
+    function clearSelections() {
+      selectedActivityIds.value = [];
     }
 
     function handleShiftSelect(index, event) {
@@ -686,21 +751,20 @@ export default {
         const start = Math.min(lastSelectedIndex, index);
         const end = Math.max(lastSelectedIndex, index);
         selectedActivityIds.value = sortedActivities.value.slice(start, end + 1).map(a => a.id);
+        emit('clear-selections', null); // Emit with null to indicate a bulk selection
       }
     }
 
     function addActivity() {
       const today = new Date().toISOString().split('T')[0];
-      const newActivity = {
-        project: props.project.id,
+      modalActivity.value = {
         name: `New Activity ${sortedActivities.value.length + 1}`,
         startDate: today,
         endDate: today,
         owner: '',
         description: '',
       };
-      const newId = addEntity('activities', newActivity);
-      openActivityModal({ id: newId, data: newActivity });
+      showActivityModal.value = true;
     }
 
     function openActivityModal(activity) {
@@ -720,19 +784,38 @@ export default {
       modalActivity.value = {};
     }
 
+    function deleteActivity(activityId) {
+      removeEntity('activities', activityId);
+      closeActivityModal();
+      emit('activity-changed'); // Emit event to trigger recalculation
+    }
+
     function saveActivityModal() {
-      const activity = props.activities.find(a => a.id === modalActivity.value.id);
-      if (activity) {
-        updateEntity('activities', activity.id, {
-          ...activity.data,
+      if (modalActivity.value.id) {
+        const activity = props.activities.find(a => a.id === modalActivity.value.id);
+        if (activity) {
+          updateEntity('activities', activity.id, {
+            ...activity.data,
+            name: modalActivity.value.name,
+            owner: modalActivity.value.owner,
+            description: modalActivity.value.description,
+            startDate: new Date(modalActivity.value.startDate).toISOString(),
+            endDate: modalActivity.value.endDate ? new Date(modalActivity.value.endDate).toISOString() : null,
+          });
+        }
+      } else {
+        const newActivity = {
+          project: props.project.id,
           name: modalActivity.value.name,
-          owner: modalActivity.value.owner,
-          description: modalActivity.value.description,
           startDate: new Date(modalActivity.value.startDate).toISOString(),
           endDate: modalActivity.value.endDate ? new Date(modalActivity.value.endDate).toISOString() : null,
-        });
+          owner: modalActivity.value.owner,
+          description: modalActivity.value.description,
+        };
+        addEntity('activities', newActivity);
       }
       closeActivityModal();
+      emit('activity-changed'); // Emit event to trigger recalculation
     }
 
     function editDependency(dep) {
@@ -743,10 +826,12 @@ export default {
         targetId: dep.data.targetId,
         dependencyType: dep.data.dependencyType,
       };
+      showDependencyModal.value = true;
     }
 
     function deleteDependency(id) {
       removeEntity('dependencies', id);
+      emit('activity-changed'); // Emit event to trigger recalculation
     }
 
     function openDependencyModal() {
@@ -780,7 +865,13 @@ export default {
       } else {
         addEntity('dependencies', depData);
       }
-      closeDependencyModal();
+      modalDependency.value = {
+        sourceId: sortedActivities.value[0]?.id || '',
+        targetId: sortedActivities.value[1]?.id || sortedActivities.value[0]?.id || '',
+        dependencyType: 'FS',
+      };
+      isEditingDependency.value = false;
+      emit('activity-changed'); // Emit event to trigger recalculation
     }
 
     function getActivityName(id) {
@@ -807,6 +898,8 @@ export default {
       modalActivity,
       modalDependency,
       isEditingDependency,
+      draggingActivityId,
+      tempActivityDates,
       updateScrollPosition,
       formatDate,
       getDateLabelPosition,
@@ -819,10 +912,12 @@ export default {
       start_drag,
       startPan,
       toggleSelection,
+      clearSelections,
       handleShiftSelect,
       addActivity,
       openActivityModal,
       closeActivityModal,
+      deleteActivity,
       saveActivityModal,
       editDependency,
       deleteDependency,
