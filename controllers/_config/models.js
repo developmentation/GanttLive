@@ -9,16 +9,16 @@ exports.getModels = async function (req, res, next) {
         provider: "gemini",
         default: true,
       },
-      {
-        name: { en: "GPT 4o", fr: "GPT 4o" },
-        model: "gpt-4o",
-        provider: "openAi",
-      },
-      {
-        name: { en: "Claude Sonnet 3.7", fr: "Claude Sonnet 3.7" },
-        model: "claude-3-7-sonnet-20250219",
-        provider: "anthropic",
-      },
+      // {
+      //   name: { en: "GPT 4o", fr: "GPT 4o" },
+      //   model: "gpt-4o",
+      //   provider: "openAi",
+      // },
+      // {
+      //   name: { en: "Claude Sonnet 3.7", fr: "Claude Sonnet 3.7" },
+      //   model: "claude-3-7-sonnet-20250219",
+      //   provider: "anthropic",
+      // },
       // {
       //   name: { en: "Gemini 1.5 Flash", fr: "Gemini 1.5 Flash" },
       //   model: "gemini-1.5-flash",
