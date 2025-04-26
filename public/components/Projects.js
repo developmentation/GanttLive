@@ -14,7 +14,7 @@ export default {
     },
   },
   template: `
-    <div class="flex flex-col h-[calc(100vh-8rem)] bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden md:flex-row">
+    <div class="flex h-[calc(100vh-8rem)] bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
       <!-- Project Summary Modal -->
       <div v-if="showSummaryModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white dark:bg-gray-800 p-6 rounded-lg w-1/2 max-h-[80vh] overflow-y-auto">
@@ -37,12 +37,11 @@ export default {
         </div>
       </div>
 
-      <!-- Projects Sidebar (Accordion on Mobile, Sidebar on Desktop) -->
-      <div class="w-full md:w-1/4 border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700 flex flex-col">
-        <!-- Header with Toggle and Add Project Button -->
-        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-4 bg-gray-50 dark:bg-gray-900">
+      <!-- Projects Sidebar (Left) -->
+      <div class="border-r border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300" :class="isProjectsOpen ? 'w-1/4' : 'w-12'">
+        <div class="p-4 border-b border-gray-200 dark:border-grey-700 flex items-center gap-4 bg-gray-50 dark:bg-gray-900">
           <button @click="toggleProjects" class="text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400">
-            <i :class="isProjectsOpen ? 'pi pi-chevron-circle-up' : 'pi pi-chevron-circle-down'"></i>
+            <i :class="isProjectsOpen ? 'pi pi-chevron-left' : 'pi pi-chevron-right'"></i>
           </button>
           <button v-if="isProjectsOpen" @click="addProject" class="p-2 bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 text-white rounded-lg transition-all shadow-sm">
             <i class="pi pi-plus"></i>
@@ -53,55 +52,30 @@ export default {
             </option>
           </select>
         </div>
-        <!-- Projects List (Accordion Content on Mobile, Full List on Desktop) -->
-        <div class="flex-1 bg-gray-50 dark:bg-gray-900">
-          <!-- Mobile: Accordion Content -->
-          <div v-if="isMobile && isProjectsOpen" class="overflow-y-auto" style="max-height: 12rem;">
-            <div v-for="project in entities?.projects || []" :key="project.id" class="p-4 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-all" :class="{ 'bg-blue-50 dark:bg-blue-900': activeProjectId === project.id }" @click="selectProject(project.id)">
-              <div class="flex-1 truncate">
-                <span v-if="isEditingProject !== project.id" class="text-gray-900 dark:text-white font-medium">{{ project.data.name }}</span>
-                <input v-else v-model="project.data.name" type="text" class="bg-transparent text-gray-900 dark:text-white flex-1 outline-none font-medium w-full" @blur="updateProject(project)" @keydown.enter="updateProject(project)" :id="'project-input-' + project.id" />
-              </div>
-              <div class="flex gap-2">
-                <button @click.stop="editProjectName(project)" class="text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400">
-                  <i class="pi pi-pencil"></i>
-                </button>
-                <button @click.stop="deleteProject(project.id)" class="text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-600">
-                  <i class="pi pi-trash"></i>
-                </button>
-              </div>
+        <div v-if="isProjectsOpen" class="flex-1 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
+          <div v-for="project in entities?.projects || []" :key="project.id" class="p-4 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-all" :class="{ 'bg-blue-50 dark:bg-blue-900': activeProjectId === project.id }" @click="selectProject(project.id)">
+            <div class="flex-1 truncate">
+              <span v-if="isEditingProject !== project.id" class="text-gray-900 dark:text-white font-medium">{{ project.data.name }}</span>
+              <input v-else v-model="project.data.name" type="text" class="bg-transparent text-gray-900 dark:text-white flex-1 outline-none font-medium w-full" @blur="updateProject(project)" @keydown.enter="updateProject(project)" :id="'project-input-' + project.id" />
             </div>
-            <div v-if="!(entities?.projects?.length > 0)" class="p-4 text-gray-500 dark:text-gray-400 text-center">
-              No projects yet. Create one to start planning!
+            <div class="flex gap-2">
+              <button @click.stop="editProjectName(project)" class="text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400">
+                <i class="pi pi-pencil"></i>
+              </button>
+              <button @click.stop="deleteProject(project.id)" class="text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-600">
+                <i class="pi pi-trash"></i>
+              </button>
             </div>
           </div>
-          <!-- Desktop: Full List -->
-          <div v-else-if="!isMobile" class="flex-1 overflow-y-auto">
-            <div v-for="project in entities?.projects || []" :key="project.id" class="p-4 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-all" :class="{ 'bg-blue-50 dark:bg-blue-900': activeProjectId === project.id }" @click="selectProject(project.id)">
-              <div class="flex-1 truncate">
-                <span v-if="isEditingProject !== project.id" class="text-gray-900 dark:text-white font-medium">{{ project.data.name }}</span>
-                <input v-else v-model="project.data.name" type="text" class="bg-transparent text-gray-900 dark:text-white flex-1 outline-none font-medium w-full" @blur="updateProject(project)" @keydown.enter="updateProject(project)" :id="'project-input-' + project.id" />
-              </div>
-              <div class="flex gap-2">
-                <button @click.stop="editProjectName(project)" class="text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400">
-                  <i class="pi pi-pencil"></i>
-                </button>
-                <button @click.stop="deleteProject(project.id)" class="text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-600">
-                  <i class="pi pi-trash"></i>
-                </button>
-              </div>
-            </div>
-            <div v-if="!(entities?.projects?.length > 0)" class="p-4 text-gray-500 dark:text-gray-400 text-center">
-              No projects yet. Create one to start planning!
-            </div>
+          <div v-if="!(entities?.projects?.length > 0)" class="p-4 text-gray-500 dark:text-gray-400 text-center">
+            No projects yet. Create one to start planning!
           </div>
         </div>
       </div>
 
-      <!-- Main Area (Project Details and Gantt Chart) -->
-      <div class="flex-1 flex flex-col relative">
+      <!-- Main Area (Gantt Chart and LLM Input) -->
+      <div class="flex-1 flex flex-col relative overflow-hidden">
         <div v-if="activeProject" class="flex-1 flex flex-col overflow-hidden">
-          <!-- Project Details -->
           <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 sticky top-0 z-10">
             <div class="flex items-center justify-between">
               <div class="flex items-center space-x-2">
@@ -124,60 +98,14 @@ export default {
               <input v-else v-model="projectOutcomes" type="text" class="bg-transparent border border-gray-200 dark:border-gray-600 rounded p-1 text-gray-500 dark:text-gray-400" @blur="saveProjectOutcomes" @keydown.enter="saveProjectOutcomes" />
             </div>
           </div>
-          <!-- Gantt Chart -->
-          <div class="flex-1 overflow-y-auto overflow-x-auto">
+          <div class="flex-1 overflow-y-auto overflow-x-hidden">
             <gantt :project="activeProject" :activities="projectActivities" :dependencies="projectDependencies" :darkMode="darkMode" :key="ganttKey" ref="gantt" @clear-selections="handleClearSelections" @activity-changed="handleActivityChanged" />
           </div>
         </div>
         <div v-else class="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
           Select a project to view its Gantt chart.
         </div>
-
-        <!-- Chat Sidebar (Hidden on Mobile by Default, Expandable) -->
-        <div v-if="activeProject" class="w-full border-t border-gray-200 dark:border-gray-700">
-          <!-- Chat Header (Toggle on Mobile) -->
-          <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex items-center justify-between">
-            <h3 class="text-lg font-semibold" :class="darkMode ? 'text-white' : 'text-gray-900'">Chat</h3>
-            <button @click="toggleChat" class="text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400">
-              <i :class="isChatOpen ? 'pi pi-chevron-circle-up' : 'pi pi-chevron-circle-down'"></i>
-            </button>
-          </div>
-          <!-- Chat Content (Visible on Desktop or When Expanded on Mobile) -->
-          <div v-if="!isMobile || isChatOpen" class="flex flex-col bg-gray-50 dark:bg-gray-900">
-            <div class="flex-1 overflow-y-auto p-4" style="max-height: 12rem;">
-              <div
-                v-for="chat in projectChats"
-                :key="chat.id"
-                class="mb-2 p-2 rounded-lg"
-                :class="chat.data.isResponse ? 'bg-gray-100 dark:bg-gray-800 mr-auto' : 'bg-gray-100 dark:bg-gray-700 ml-auto'"
-              >
-                <div class="flex items-center mb-1">
-                  <span class="font-semibold" :class="darkMode ? 'text-white' : 'text-gray-900'">
-                    {{ chat.data.userName || 'User' }}
-                  </span>
-                  <span class="text-xs text-gray-500 dark:text-gray-400 ml-2">
-                    {{ formatTime(chat.timestamp) }}
-                  </span>
-                </div>
-                <div class="text-sm" :class="darkMode ? 'text-gray-200' : 'text-gray-800'" v-html="renderMarkdown(chat.data.text)"></div>
-              </div>
-              <div v-if="!projectChats?.length" class="text-gray-500 dark:text-gray-400 text-sm text-center">
-                No chat messages yet.
-              </div>
-            </div>
-            <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-              <div class="flex gap-3">
-                <textarea v-model="chatDraft" rows="1" class="flex-1 p-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:outline-none transition-all resize-none whitespace-pre-wrap" placeholder="Chat with team members..." @keydown.enter="sendChatMessage"></textarea>
-                <button @click="sendChatMessage" class="py-2 px-4 bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 text-white rounded-lg transition-all" :disabled="!chatDraft?.trim() || !activeProjectId">
-                  Send
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- LLM Input (Fixed at Bottom) -->
-        <div v-if="activeProject" class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 sticky bottom-0 z-10">
+        <div v-if="activeProject" class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
           <div class="flex gap-3 items-center">
             <textarea v-model="draft" rows="2" class="flex-1 p-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:outline-none transition-all resize-none whitespace-pre-wrap" :placeholder="inputPlaceholder" @keydown.enter="handleEnterKey"></textarea>
             <button @click="sendMessage" class="py-2 px-4 bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 text-white rounded-lg transition-all flex items-center" :disabled="!draft?.trim() || !selectedModel || !activeProjectId || isSending">
@@ -190,6 +118,47 @@ export default {
                 Generating...
               </span>
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat Sidebar (Right) -->
+      <div class="border-l border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300" :class="isChatOpen ? 'w-1/4' : 'w-12'">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex items-center justify-between">
+          <h3 v-if="isChatOpen" class="text-lg font-semibold" :class="darkMode ? 'text-white' : 'text-gray-900'">Chat</h3>
+          <button @click="toggleChat" class="text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400">
+            <i :class="isChatOpen ? 'pi pi-chevron-right' : 'pi pi-chevron-left'"></i>
+          </button>
+        </div>
+        <div v-if="isChatOpen" class="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900">
+          <div v-if="activeProject" class="flex-1 overflow-y-auto p-4" style="max-height:500px">
+            <div
+              v-for="chat in projectChats"
+              :key="chat.id"
+              class="mb-2 p-2 rounded-lg"
+              :class="chat.data.isResponse ? 'bg-gray-100 dark:bg-gray-800 mr-auto' : 'bg-gray-100 dark:bg-gray-700 ml-auto'"
+            >
+              <div class="flex items-center mb-1">
+                <span class="font-semibold" :class="darkMode ? 'text-white' : 'text-gray-900'">
+                  {{ chat.data.userName || 'User' }}
+                </span>
+                <span class="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                  {{ formatTime(chat.timestamp) }}
+                </span>
+              </div>
+              <div class="text-sm" :class="darkMode ? 'text-gray-200' : 'text-gray-800'" v-html="renderMarkdown(chat.data.text)"></div>
+            </div>
+            <div v-if="!projectChats?.length" class="text-gray-500 dark:text-gray-400 text-sm text-center">
+              No chat messages yet.
+            </div>
+          </div>
+          <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+            <div class="flex gap-3">
+              <textarea v-model="chatDraft" rows="1" class="flex-1 p-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:outline-none transition-all resize-none whitespace-pre-wrap" placeholder="Chat with team members..." @keydown.enter="sendChatMessage"></textarea>
+              <button @click="sendChatMessage" class="py-2 px-4 bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 text-white rounded-lg transition-all" :disabled="!chatDraft?.trim() || !activeProjectId">
+                Send
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -214,9 +183,8 @@ export default {
     const projectDescription = Vue.ref('');
     const projectBudget = Vue.ref(null);
     const projectOutcomes = Vue.ref('');
-    const isChatOpen = Vue.ref(false); // Default to closed on mobile
-    const isProjectsOpen = Vue.ref(false); // Default to closed on mobile
-    const isMobile = Vue.ref(false);
+    const isChatOpen = Vue.ref(true);
+    const isProjectsOpen = Vue.ref(true);
     const gantt = Vue.ref(null);
     const showSummaryModal = Vue.ref(false);
     const projectSummary = Vue.ref('');
@@ -258,29 +226,6 @@ export default {
         return 'Describe changes to selected activities or dependencies...';
       }
       return 'Describe your project, activities, or dependencies to generate a plan...';
-    });
-
-    // Detect mobile devices
-    function detectMobile() {
-      const mobileWidthThreshold = 768; // Tailwind's 'md' breakpoint
-      isMobile.value = window.innerWidth <= mobileWidthThreshold;
-      // Adjust visibility based on mobile state
-      if (isMobile.value) {
-        isProjectsOpen.value = false;
-        isChatOpen.value = false;
-      } else {
-        isProjectsOpen.value = true;
-        isChatOpen.value = true;
-      }
-    }
-
-    Vue.onMounted(() => {
-      detectMobile();
-      window.addEventListener('resize', detectMobile);
-    });
-
-    Vue.onUnmounted(() => {
-      window.removeEventListener('resize', detectMobile);
     });
 
     Vue.watch(
@@ -329,18 +274,12 @@ export default {
       });
       activeProjectId.value = id;
       selectedActivityIds.value = [];
-      if (isMobile.value) {
-        isProjectsOpen.value = false; // Collapse accordion on new project
-      }
     }
 
     function selectProject(id) {
       activeProjectId.value = id;
       isEditingProject.value = null;
       selectedActivityIds.value = [];
-      if (isMobile.value) {
-        isProjectsOpen.value = false; // Collapse accordion on selection
-      }
     }
 
     function editProjectName(project) {
@@ -642,6 +581,7 @@ export default {
         model: 'grok-3',
       };
       try {
+
         console.log("LLM SEND", messageHistory)
 
         triggerLLM('projects', activeProjectId.value, {
@@ -688,162 +628,168 @@ export default {
       };
       llmResponses.push(newResponse);
 
-      try {
-        if (responseText.startsWith('```json')) {
-          responseText = responseText.replace(/```json\n|\n```/g, '').trim();
-          const parsed = JSON5.parse(responseText);
+      // Ensure all updates are processed in a single tick to avoid reactivity issues
+    //   Vue.nextTick(() => {
+        try {
+          if (responseText.startsWith('```json')) {
+            responseText = responseText.replace(/```json\n|\n```/g, '').trim();
+            const parsed = JSON5.parse(responseText);
 
-          updateEntity('projects', activeProjectId.value, {
-            ...activeProject.value.data,
-            ...(parsed.project || {}),
-            llmResponses,
-            llmLastResponse: null,
-          });
+            // Update project data
+            updateEntity('projects', activeProjectId.value, {
+              ...activeProject.value.data,
+              ...(parsed.project || {}),
+              llmResponses,
+              llmLastResponse: null,
+            });
 
-          const activityIdMapping = {};
+            const activityIdMapping = {};
 
-          if (parsed.activities) {
-            parsed.activities.forEach((act, index) => {
-              const newId = addEntity('activities', {
-                project: activeProjectId.value,
-                ...act,
+            if (parsed.activities) {
+              parsed.activities.forEach((act, index) => {
+                const newId = addEntity('activities', {
+                  project: activeProjectId.value,
+                  ...act,
+                });
+                activityIdMapping[index] = newId;
+                if (act.name) activityIdMapping[act.name] = newId;
               });
-              activityIdMapping[index] = newId;
-              if (act.name) activityIdMapping[act.name] = newId;
-            });
-          }
+            }
 
-          if (parsed.activitiesToAdd) {
-            parsed.activitiesToAdd.forEach((act, index) => {
-              const newId = addEntity('activities', {
-                project: activeProjectId.value,
-                ...act,
+            if (parsed.activitiesToAdd) {
+              parsed.activitiesToAdd.forEach((act, index) => {
+                const newId = addEntity('activities', {
+                  project: activeProjectId.value,
+                  ...act,
+                });
+                activityIdMapping[index + (parsed.activities ? parsed.activities.length : 0)] = newId;
+                if (act.name) activityIdMapping[act.name] = newId;
               });
-              activityIdMapping[index + (parsed.activities ? parsed.activities.length : 0)] = newId;
-              if (act.name) activityIdMapping[act.name] = newId;
-            });
-          }
+            }
 
-          if (parsed.activitiesToUpdate) {
-            parsed.activitiesToUpdate.forEach(update => {
-              const act = entities.value?.activities?.find(a => a.id === update.id);
-              if (act) {
-                updateEntity('activities', update.id, {
-                  ...act.data,
-                  ...update,
-                });
-              }
-            });
-          }
-
-          if (parsed.activitiesToDelete) {
-            parsed.activitiesToDelete.forEach(id => {
-              if (entities.value?.activities?.some(a => a.id === id)) {
-                removeEntity('activities', id);
-              }
-            });
-          }
-
-          if (parsed.dependencies) {
-            parsed.dependencies.forEach(dep => {
-              let sourceId = dep.sourceId;
-              let targetId = dep.targetId;
-              if (!isNaN(dep.sourceId)) sourceId = activityIdMapping[parseInt(dep.sourceId)];
-              else if (typeof dep.sourceId === 'string') sourceId = activityIdMapping[dep.sourceId];
-              if (!isNaN(dep.targetId)) targetId = activityIdMapping[parseInt(dep.targetId)];
-              else if (typeof dep.targetId === 'string') targetId = activityIdMapping[dep.targetId];
-
-              if (sourceId && targetId && sourceId !== targetId) {
-                addEntity('dependencies', {
-                  sourceId,
-                  targetId,
-                  dependencyType: dep.dependencyType,
-                });
-              }
-            });
-          }
-
-          if (parsed.dependenciesToAdd) {
-            parsed.dependenciesToAdd.forEach(dep => {
-              let sourceId = dep.sourceId;
-              let targetId = dep.targetId;
-              if (!isNaN(dep.sourceId)) sourceId = activityIdMapping[parseInt(dep.sourceId)];
-              else if (typeof dep.sourceId === 'string') sourceId = activityIdMapping[dep.sourceId];
-              if (!isNaN(dep.targetId)) targetId = activityIdMapping[parseInt(dep.targetId)];
-              else if (typeof dep.targetId === 'string') targetId = activityIdMapping[dep.targetId];
-
-              if (sourceId && targetId && sourceId !== targetId) {
-                addEntity('dependencies', {
-                  sourceId,
-                  targetId,
-                  dependencyType: dep.dependencyType,
-                });
-              }
-            });
-          }
-
-          if (parsed.dependenciesToUpdate) {
-            parsed.dependenciesToUpdate.forEach(update => {
-              const dep = entities.value?.dependencies?.find(d => d.id === update.id);
-              if (dep) {
-                let sourceId = update.sourceId;
-                let targetId = update.targetId;
-                if (!isNaN(update.sourceId)) sourceId = activityIdMapping[parseInt(update.sourceId)];
-                else if (typeof update.sourceId === 'string') sourceId = activityIdMapping[update.sourceId];
-                if (!isNaN(update.targetId)) sourceId = activityIdMapping[parseInt(update.targetId)];
-                else if (typeof update.targetId === 'string') targetId = activityIdMapping[update.targetId];
-
-                if (sourceId && targetId && sourceId !== targetId) {
-                  updateEntity('dependencies', update.id, {
-                    ...dep.data,
-                    sourceId,
-                    targetId,
-                    dependencyType: update.dependencyType,
+            if (parsed.activitiesToUpdate) {
+              parsed.activitiesToUpdate.forEach(update => {
+                const act = entities.value?.activities?.find(a => a.id === update.id);
+                if (act) {
+                  updateEntity('activities', update.id, {
+                    ...act.data,
+                    ...update,
                   });
                 }
-              }
+              });
+            }
+
+            if (parsed.activitiesToDelete) {
+              parsed.activitiesToDelete.forEach(id => {
+                if (entities.value?.activities?.some(a => a.id === id)) {
+                  removeEntity('activities', id);
+                }
+              });
+            }
+
+            if (parsed.dependencies) {
+              parsed.dependencies.forEach(dep => {
+                let sourceId = dep.sourceId;
+                let targetId = dep.targetId;
+                if (!isNaN(dep.sourceId)) sourceId = activityIdMapping[parseInt(dep.sourceId)];
+                else if (typeof dep.sourceId === 'string') sourceId = activityIdMapping[dep.sourceId];
+                if (!isNaN(dep.targetId)) targetId = activityIdMapping[parseInt(dep.targetId)];
+                else if (typeof dep.targetId === 'string') targetId = activityIdMapping[dep.targetId];
+
+                if (sourceId && targetId && sourceId !== targetId) {
+                  addEntity('dependencies', {
+                    sourceId,
+                    targetId,
+                    dependencyType: dep.dependencyType,
+                  });
+                }
+              });
+            }
+
+            if (parsed.dependenciesToAdd) {
+              parsed.dependenciesToAdd.forEach(dep => {
+                let sourceId = dep.sourceId;
+                let targetId = dep.targetId;
+                if (!isNaN(dep.sourceId)) sourceId = activityIdMapping[parseInt(dep.sourceId)];
+                else if (typeof dep.sourceId === 'string') sourceId = activityIdMapping[dep.sourceId];
+                if (!isNaN(dep.targetId)) targetId = activityIdMapping[parseInt(dep.targetId)];
+                else if (typeof dep.targetId === 'string') targetId = activityIdMapping[dep.targetId];
+
+                if (sourceId && targetId && sourceId !== targetId) {
+                  addEntity('dependencies', {
+                    sourceId,
+                    targetId,
+                    dependencyType: dep.dependencyType,
+                  });
+                }
+              });
+            }
+
+            if (parsed.dependenciesToUpdate) {
+              parsed.dependenciesToUpdate.forEach(update => {
+                const dep = entities.value?.dependencies?.find(d => d.id === update.id);
+                if (dep) {
+                  let sourceId = update.sourceId;
+                  let targetId = update.targetId;
+                  if (!isNaN(update.sourceId)) sourceId = activityIdMapping[parseInt(update.sourceId)];
+                  else if (typeof update.sourceId === 'string') sourceId = activityIdMapping[update.sourceId];
+                  if (!isNaN(update.targetId)) sourceId = activityIdMapping[parseInt(update.targetId)];
+                  else if (typeof update.targetId === 'string') targetId = activityIdMapping[update.targetId];
+
+                  if (sourceId && targetId && sourceId !== targetId) {
+                    updateEntity('dependencies', update.id, {
+                      ...dep.data,
+                      sourceId,
+                      targetId,
+                      dependencyType: update.dependencyType,
+                    });
+                  }
+                }
+              });
+            }
+
+            if (parsed.dependenciesToDelete) {
+              parsed.dependenciesToDelete.forEach(id => {
+                if (entities.value?.dependencies?.some(d => d.id === id)) {
+                  removeEntity('dependencies', id);
+                }
+              });
+            }
+          } else {
+            updateEntity('projects', activeProjectId.value, {
+              ...activeProject.value.data,
+              summary: newResponse,
+              llmResponses,
+              llmLastResponse: null,
             });
+            projectSummary.value = newResponse.text;
           }
 
-          if (parsed.dependenciesToDelete) {
-            parsed.dependenciesToDelete.forEach(id => {
-              if (entities.value?.dependencies?.some(d => d.id === id)) {
-                removeEntity('dependencies', id);
-              }
-            });
-          }
-        } else {
+          // Force a reactive update to ensure UI reflects changes
+          entities.value = { ...entities.value };
+        } catch (error) {
+          console.error('Error processing LLM response:', error);
           updateEntity('projects', activeProjectId.value, {
             ...activeProject.value.data,
-            summary: newResponse,
-            llmResponses,
+            llmResponses: llmResponses.concat([{
+              text: 'Error: Invalid JSON response',
+              isStreaming: false,
+              timestamp: Date.now(),
+            }]),
             llmLastResponse: null,
           });
-          projectSummary.value = newResponse.text;
+          // Force a reactive update on error
+          entities.value = { ...entities.value };
         }
 
-        entities.value = { ...entities.value };
-      } catch (error) {
-        console.error('Error processing LLM response:', error);
-        updateEntity('projects', activeProjectId.value, {
-          ...activeProject.value.data,
-          llmResponses: llmResponses.concat([{
-            text: 'Error: Invalid JSON response',
-            isStreaming: false,
-            timestamp: Date.now(),
-          }]),
-          llmLastResponse: null,
-        });
-        entities.value = { ...entities.value };
-      }
-
-      isSending.value = false;
-      isGeneratingSummary.value = false;
-      selectedActivityIds.value = [];
-      if (gantt.value && typeof gantt.value.clearSelections === 'function') {
-        gantt.value.clearSelections();
-      }
-      ganttKey.value += 1;
+        isSending.value = false;
+        isGeneratingSummary.value = false;
+        selectedActivityIds.value = [];
+        if (gantt.value && typeof gantt.value.clearSelections === 'function') {
+          gantt.value.clearSelections();
+        }
+        ganttKey.value += 1;
+    //   });
     }
 
     const { on } = useRealTime();
@@ -875,7 +821,6 @@ export default {
       inputPlaceholder,
       isChatOpen,
       isProjectsOpen,
-      isMobile,
       gantt,
       models,
       showSummaryModal,
