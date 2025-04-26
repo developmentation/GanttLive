@@ -183,7 +183,7 @@ export default {
     const projectDescription = Vue.ref('');
     const projectBudget = Vue.ref(null);
     const projectOutcomes = Vue.ref('');
-    const isChatOpen = Vue.ref(true);
+    const isChatOpen = Vue.ref(false);
     const isProjectsOpen = Vue.ref(true);
     const gantt = Vue.ref(null);
     const showSummaryModal = Vue.ref(false);
